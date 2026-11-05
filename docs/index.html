@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1-Day Market Risk & Return ML Platform | ES 335 Machine Learning</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  
+  <!-- Chart.js & KaTeX for Math Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css?v=3.5" />
+</head>
+<body>
+  <!-- Dashboard Layout -->
+  <div class="dashboard-layout">
+    <!-- Mobile Backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- Fixed Left Sidebar Navigation -->
+    <aside class="dashboard-sidebar" id="dashboard-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <span class="sidebar-logo">🤖</span>
+          <div class="sidebar-brand-text">
+            <span class="sidebar-title">ML RISK ENGINE</span>
+            <span class="sidebar-subtitle">1-Day Horizon &bull; ES 335 ML</span>
+          </div>
+        </div>
+        <button class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close Sidebar">&times;</button>
+      </div>
+
+      <!-- Engine Status Box -->
+      <div class="sidebar-status-box">
+        <div class="sidebar-status-header">
+          <span class="live-pulse" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981;"></span>
+          <span class="status-name">ML Engine Status</span>
+        </div>
+        <div class="sidebar-status-row">
+          <span class="status-metric">5 ML Models Active</span>
+          <span class="status-latency">1-Day Step</span>
+        </div>
+        <div class="sidebar-status-row" style="margin-top: 4px; font-size: 0.72rem; color: #94a3b8;">
+          <span>22 Features Engineered</span>
+          <span>459 Test Days</span>
+        </div>
+      </div>
+
+      <!-- Navigation Menu -->
+      <nav class="sidebar-nav">
+        <div class="sidebar-nav-label">Interactive AI Prediction</div>
+        <button class="tab-btn active" data-tab="human-inference">
+          <span class="tab-icon">🎯</span>
+          <span class="tab-label">Easy AI Predictor</span>
+          <span class="tab-badge" style="background: rgba(16,185,129,0.2); color:#10b981;">FOR HUMANS</span>
+        </button>
+        <button class="tab-btn" data-tab="lab">
+          <span class="tab-icon">🧪</span>
+          <span class="tab-label">Advanced Feature Lab</span>
+          <span class="tab-badge" style="background: rgba(56,189,248,0.2); color:#38bdf8;">SLIDERS</span>
+        </button>
+
+        <div class="sidebar-nav-label">Real Graphs & Diagnostics</div>
+        <button class="tab-btn" data-tab="replay">
+          <span class="tab-icon">⏪</span>
+          <span class="tab-label">Predictions vs Actual</span>
+          <span class="tab-badge" style="background: rgba(168,85,247,0.2); color:#c084fc;">REAL GRAPH</span>
+        </button>
+        <button class="tab-btn" data-tab="scorecard">
+          <span class="tab-icon">🏆</span>
+          <span class="tab-label">Model Scorecard & ROC</span>
+          <span class="tab-badge" style="background: rgba(245,158,11,0.2); color:#fbbf24;">REAL ROC</span>
+        </button>
+        <button class="tab-btn" data-tab="errors">
+          <span class="tab-icon">🔍</span>
+          <span class="tab-label">Error Analysis & Residuals</span>
+          <span class="tab-badge" style="background: rgba(239,68,68,0.2); color:#ef4444;">RESIDUALS</span>
+        </button>
+        <button class="tab-btn" data-tab="features">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">22-Feature Catalog</span>
+        </button>
+
+        <div class="sidebar-nav-label">Theory & Exam Prep</div>
+        <button class="tab-btn" data-tab="theory">
+          <span class="tab-icon">📐</span>
+          <span class="tab-label">ML Theory & Defense</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-team-info">
+          <div class="team-label">ES 335 ML Project Team</div>
+          <div class="team-members">Siddharth Dangi (25110300)<br />Aryan Vatsa Chauhan (25110059)</div>
+        </div>
+        <a href="https://github.com/siddharthdangi1911/Portfolio_Risk_Analyzer" target="_blank" class="sidebar-gh-link">
+          <span>GitHub Codebase</span> ↗
+        </a>
+      </div>
+    </aside>
+
+    <!-- Dashboard Main Area -->
+    <div class="dashboard-main">
+      <!-- Mobile Topbar -->
+      <header class="mobile-topbar">
+        <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Open Navigation">
+          <span></span><span></span><span></span>
+        </button>
+        <span class="mobile-brand-title">🤖 1-DAY RISK ML PLATFORM</span>
+      </header>
+
+      <!-- Main Content Container -->
+      <main class="main-container">
+
+        <!-- ================================================================= -->
+        <!-- TAB 0: EASY AI PREDICTOR FOR HUMANS (NO FINANCE JARGON) -->
+        <!-- ================================================================= -->
+        <section id="tab-human-inference" class="tab-content active">
+          <!-- Top Friendly Banner -->
+          <div class="card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(15, 23, 42, 0.8) 100%);">
+            <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 1.6rem;">🎯</span>
+                  <h2 class="card-title" style="margin: 0; font-size: 1.35rem;">Easy AI Risk & Return Predictor</h2>
+                </div>
+                <p class="card-subtitle" style="margin-top: 5px;">
+                  Answer 4 simple questions about today's market, and our 5 Machine Learning models will instantly tell you whether tomorrow is <strong>Safe</strong> or has a <strong>High Crash Risk</strong> in plain English!
+                </p>
+              </div>
+
+              <!-- Instant Presets -->
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">One-Click Scenarios:</span>
+                <button class="btn btn-secondary preset-btn" data-preset="calm" style="padding: 5px 10px; font-size: 0.78rem;">☕ Calm Market</button>
+                <button class="btn btn-secondary preset-btn" data-preset="normal" style="padding: 5px 10px; font-size: 0.78rem;">📊 Typical Day</button>
+                <button class="btn btn-secondary preset-btn" data-preset="rally" style="padding: 5px 10px; font-size: 0.78rem;">🚀 Strong Rally</button>
+                <button class="btn btn-secondary preset-btn" data-preset="panic" style="padding: 5px 10px; font-size: 0.78rem; background: rgba(239,68,68,0.2); border-color:#ef4444; color:#ef4444;">🚨 Panic Crisis</button>
+              </div>
+            </div>
+
+            <!-- User Question Inputs Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.25rem;">
+              <!-- Question 1: Today's Price Move -->
+              <div style="background: rgba(15,23,42,0.6); padding: 12px 14px; border-radius: 8px; border: 1px solid #1e293b;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                  1. How did the stock market move today?
+                </label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span id="human-ret-label" style="font-size: 0.85rem; color: #38bdf8; font-weight: 700; font-family: monospace;">+0.00% (Flat)</span>
+                </div>
+                <input type="range" id="human-slider-ret" min="-4.0" max="4.0" step="0.2" value="0.0" style="width: 100%; accent-color: #38bdf8; cursor: pointer;" />
+                <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #64748b; margin-top: 3px;">
+                  <span>-4% (Steep Selloff)</span>
+                  <span>0% (Flat)</span>
+                  <span>+4% (Sharp Rally)</span>
+                </div>
+              </div>
+
+              <!-- Question 2: Market Fear / VIX -->
+              <div style="background: rgba(15,23,42,0.6); padding: 12px 14px; border-radius: 8px; border: 1px solid #1e293b;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                  2. How nervous / scared is the market? (Fear Index)
+                </label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span id="human-vix-label" style="font-size: 0.85rem; color: #fbbf24; font-weight: 700; font-family: monospace;">16.0 (Normal)</span>
+                </div>
+                <input type="range" id="human-slider-vix" min="10.0" max="45.0" step="1.0" value="16.0" style="width: 100%; accent-color: #fbbf24; cursor: pointer;" />
+                <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #64748b; margin-top: 3px;">
+                  <span>10 (Very Calm)</span>
+                  <span>18 (Normal)</span>
+                  <span>45+ (Severe Panic)</span>
+                </div>
+              </div>
+
+              <!-- Question 3: Trading Volume Activity -->
+              <div style="background: rgba(15,23,42,0.6); padding: 12px 14px; border-radius: 8px; border: 1px solid #1e293b;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                  3. What was the trading volume activity?
+                </label>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                  <button class="btn btn-secondary vol-choice-btn" data-vol="0.75" style="flex: 1; padding: 6px 4px; font-size: 0.72rem;">Quiet</button>
+                  <button class="btn btn-secondary vol-choice-btn active" data-vol="1.00" style="flex: 1; padding: 6px 4px; font-size: 0.72rem; background: #0284c7; color:#fff;">Normal</button>
+                  <button class="btn btn-secondary vol-choice-btn" data-vol="1.50" style="flex: 1; padding: 6px 4px; font-size: 0.72rem;">Heavy</button>
+                  <button class="btn btn-secondary vol-choice-btn" data-vol="2.20" style="flex: 1; padding: 6px 4px; font-size: 0.72rem;">Surge</button>
+                </div>
+                <span id="human-vol-desc" style="display: block; font-size: 0.7rem; color: #94a3b8; margin-top: 6px;">Normal average daily trading volume.</span>
+              </div>
+
+              <!-- Question 4: Recent 1-Month Trend -->
+              <div style="background: rgba(15,23,42,0.6); padding: 12px 14px; border-radius: 8px; border: 1px solid #1e293b;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                  4. What has the past month's trend been?
+                </label>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                  <button class="btn btn-secondary trend-choice-btn" data-trend="crash" style="flex: 1; padding: 6px 4px; font-size: 0.72rem; color: #ef4444;">Bear Drop</button>
+                  <button class="btn btn-secondary trend-choice-btn active" data-trend="flat" style="flex: 1; padding: 6px 4px; font-size: 0.72rem; background: #0284c7; color:#fff;">Sideways</button>
+                  <button class="btn btn-secondary trend-choice-btn" data-trend="mild_up" style="flex: 1; padding: 6px 4px; font-size: 0.72rem;">Mild Uptrend</button>
+                  <button class="btn btn-secondary trend-choice-btn" data-trend="strong_up" style="flex: 1; padding: 6px 4px; font-size: 0.72rem; color: #10b981;">Strong Bull</button>
+                </div>
+                <span id="human-trend-desc" style="display: block; font-size: 0.7rem; color: #94a3b8; margin-top: 6px;">Market fluctuating around equilibrium.</span>
+              </div>
+            </div>
+
+            <!-- AI Output Card for Humans -->
+            <div style="margin-top: 1.5rem; background: #0b0f19; border: 2px solid #1e293b; border-radius: 10px; padding: 1.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 1rem; border-bottom: 1px solid #1e293b; padding-bottom: 1rem;">
+                <div>
+                  <span style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; letter-spacing: 0.05em;">AI Consensus Verdict for Tomorrow</span>
+                  <div id="human-risk-status" style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 2px;">🟢 LOW RISK (SAFE)</div>
+                </div>
+
+                <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                  <div>
+                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Expected Direction:</span>
+                    <strong id="human-pred-dir" style="font-size: 1.15rem; color: #f1f5f9;">📈 Upward Drift (+0.04%)</strong>
+                  </div>
+                  <div>
+                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Chance of Crash (≤ -1.6%):</span>
+                    <strong id="human-crash-prob" style="font-size: 1.15rem; color: #10b981;">28.5%</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Plain English Explanation Box -->
+              <div style="background: rgba(15,23,42,0.8); border: 1px solid #1e293b; border-left: 4px solid #38bdf8; border-radius: 6px; padding: 1rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span style="font-size: 1.1rem;">💡</span>
+                  <strong style="color: #38bdf8; font-size: 0.9rem;">Plain-English AI Explanation (Why this result?):</strong>
+                </div>
+                <p id="human-plain-english" style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.6; margin: 0;">
+                  Market metrics are currently near historical baseline values. The CBOE VIX fear index is normal (16.0) and trading volume is steady. 4 out of 5 Machine Learning models agree that downside crash probability tomorrow is low (28%), with expected price change around +0.04%.
+                </p>
+              </div>
+
+              <!-- 5-Model Consensus Cards -->
+              <div>
+                <span style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">
+                  Individual Model Opinions:
+                </span>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                  <div style="background: rgba(15,23,42,0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid #1e293b; border-left: 3px solid #38bdf8;">
+                    <div style="font-size: 0.72rem; color: #38bdf8; font-weight: 700;">Linear Regression</div>
+                    <div id="hm-lin-val" style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; margin: 2px 0;">+0.01%</div>
+                    <div style="font-size: 0.68rem; color: #64748b;">Baseline Linear Trend</div>
+                  </div>
+
+                  <div style="background: rgba(15,23,42,0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid #1e293b; border-left: 3px solid #a855f7;">
+                    <div style="font-size: 0.72rem; color: #c084fc; font-weight: 700;">Decision Tree</div>
+                    <div id="hm-dt-val" style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; margin: 2px 0;">+0.05%</div>
+                    <div id="hm-dt-sub" style="font-size: 0.68rem; color: #64748b;">Risk: 35%</div>
+                  </div>
+
+                  <div style="background: rgba(15,23,42,0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid #1e293b; border-left: 3px solid #10b981;">
+                    <div style="font-size: 0.72rem; color: #10b981; font-weight: 700;">SVM (RBF Kernel)</div>
+                    <div id="hm-svm-val" style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; margin: 2px 0;">+0.12%</div>
+                    <div id="hm-svm-sub" style="font-size: 0.68rem; color: #64748b;">Risk: 7%</div>
+                  </div>
+
+                  <div style="background: rgba(15,23,42,0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid #1e293b; border-left: 3px solid #fbbf24;">
+                    <div style="font-size: 0.72rem; color: #fbbf24; font-weight: 700;">Logistic Regression</div>
+                    <div id="hm-log-val" style="font-size: 1.05rem; font-weight: 700; color: #fbbf24; margin: 2px 0;">31.9% Crash Prob</div>
+                    <div id="hm-log-sub" style="font-size: 0.68rem; color: #10b981;">Safe (Normal)</div>
+                  </div>
+
+                  <div style="background: rgba(15,23,42,0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid #1e293b; border-left: 3px solid #ec4899;">
+                    <div style="font-size: 0.72rem; color: #f472b6; font-weight: 700;">LightGBM Ensemble</div>
+                    <div id="hm-lgb-val" style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; margin: 2px 0;">+0.02%</div>
+                    <div id="hm-lgb-sub" style="font-size: 0.68rem; color: #64748b;">Risk: 37%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 1: ADVANCED FEATURE LAB (TECHNICAL SLIDERS) -->
+        <!-- ================================================================= -->
+        <section id="tab-lab" class="tab-content">
+          <div class="card" style="border: 1px solid rgba(56, 189, 248, 0.3);">
+            <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 1.5rem;">🧪</span>
+                  <h2 class="card-title" style="margin: 0; font-size: 1.35rem;">Technical 1-Day Feature Laboratory</h2>
+                </div>
+                <p class="card-subtitle" style="margin-top: 5px;">
+                  Granular manual control over technical inputs: tweak return lags, rolling volatility ratios, drawdowns, and kurtosis.
+                </p>
+              </div>
+
+              <!-- Presets & Jump -->
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(15,23,42,0.8); border: 1px solid #334155; padding: 6px 12px; border-radius: 6px;">
+                  <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">Pick Test Date:</span>
+                  <select id="test-date-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem; max-width: 150px; cursor: pointer;">
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+
+                <button id="btn-reset-sliders" class="btn btn-secondary" style="background: rgba(51,65,85,0.7); border: 1px solid #475569; color: #f8fafc; padding: 6px 12px; font-size: 0.8rem; border-radius: 4px; cursor: pointer;">
+                  ↺ Reset Sliders
+                </button>
+              </div>
+            </div>
+
+            <!-- Ground Truth Box -->
+            <div id="actual-day-box" style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <span>📅 <strong style="color: #cbd5e1;">Test Date:</strong> <span id="actual-date-val" style="color: #38bdf8; font-family: monospace;">2023-01-03</span></span>
+                <span>🎯 <strong style="color: #cbd5e1;">Actual Next-Day Return:</strong> <span id="actual-ret-val" style="font-family: monospace; font-weight: 700; color: #10b981;">+0.77%</span></span>
+                <span>⚡ <strong style="color: #cbd5e1;">VIX Level:</strong> <span id="actual-vix-val" style="font-family: monospace;">22.90</span></span>
+              </div>
+              <div>
+                <span>Ground Truth Tail Risk: </span>
+                <span id="actual-risk-badge" class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981;">Normal Day</span>
+              </div>
+            </div>
+
+            <!-- Sliders Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-top: 1rem;">
+              <div style="background: rgba(15,23,42,0.5); padding: 10px 14px; border-radius: 6px; border: 1px solid #1e293b;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">Daily Return (%)</span>
+                  <span id="val-ret" style="font-family: monospace; font-size: 0.8rem; color: #38bdf8; font-weight: 700;">+0.00%</span>
+                </div>
+                <input type="range" id="slider-ret" min="-5.0" max="5.0" step="0.1" value="0.0" style="width: 100%; accent-color: #38bdf8;" />
+              </div>
+
+              <div style="background: rgba(15,23,42,0.5); padding: 10px 14px; border-radius: 6px; border: 1px solid #1e293b;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">CBOE VIX Index</span>
+                  <span id="val-vix" style="font-family: monospace; font-size: 0.8rem; color: #fbbf24; font-weight: 700;">16.0</span>
+                </div>
+                <input type="range" id="slider-vix" min="9.0" max="65.0" step="0.5" value="16.0" style="width: 100%; accent-color: #fbbf24;" />
+              </div>
+
+              <div style="background: rgba(15,23,42,0.5); padding: 10px 14px; border-radius: 6px; border: 1px solid #1e293b;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">5-Day Realized Vol (%)</span>
+                  <span id="val-vol5d" style="font-family: monospace; font-size: 0.8rem; color: #10b981; font-weight: 700;">14.5%</span>
+                </div>
+                <input type="range" id="slider-vol5d" min="3.0" max="80.0" step="0.5" value="14.5" style="width: 100%; accent-color: #10b981;" />
+              </div>
+
+              <div style="background: rgba(15,23,42,0.5); padding: 10px 14px; border-radius: 6px; border: 1px solid #1e293b;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">Vol Ratio (5d/60d)</span>
+                  <span id="val-volratio" style="font-family: monospace; font-size: 0.8rem; color: #c084fc; font-weight: 700;">0.95</span>
+                </div>
+                <input type="range" id="slider-volratio" min="0.3" max="3.0" step="0.05" value="0.95" style="width: 100%; accent-color: #a855f7;" />
+              </div>
+            </div>
+
+            <!-- Prediction Comparison Bar Chart -->
+            <div style="margin-top: 1.5rem; height: 260px;">
+              <canvas id="predCompareChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: PREDICTIONS VS ACTUAL (WITH REAL GENERATED FIGURE) -->
+        <!-- ================================================================= -->
+        <section id="tab-replay" class="tab-content">
+          <div class="card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <h2 class="card-title">Real Graph: Next-Day Return Predictions vs Ground Truth</h2>
+                <p class="card-subtitle">
+                  Generated directly from our out-of-sample test split (459 trading days, 2023–2024). Models evaluated chronologically with zero lookahead bias.
+                </p>
+              </div>
+
+              <!-- Replay Controls -->
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <button id="replay-play-btn" class="btn btn-primary" style="background: #0284c7; padding: 6px 14px; font-weight: 700; font-size: 0.82rem; border: none; border-radius: 4px; cursor: pointer;">
+                  ▶ Auto Play
+                </button>
+                <button id="replay-prev-btn" class="btn btn-secondary" style="background: rgba(51,65,85,0.7); border: 1px solid #475569; color: #f8fafc; padding: 6px 10px; font-size: 0.82rem; border-radius: 4px; cursor: pointer;">
+                  ◀ Prev
+                </button>
+                <button id="replay-next-btn" class="btn btn-secondary" style="background: rgba(51,65,85,0.7); border: 1px solid #475569; color: #f8fafc; padding: 6px 10px; font-size: 0.82rem; border-radius: 4px; cursor: pointer;">
+                  Next ▶
+                </button>
+              </div>
+            </div>
+
+            <!-- Real High-Resolution Figure Display -->
+            <div style="margin-top: 1rem; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #0b0f19;">
+              <div style="padding: 8px 12px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 0.85rem; color: #38bdf8;">📸 Real Generated Publication Figure (300 DPI Matplotlib Output)</strong>
+                <span class="badge" style="background: rgba(16,185,129,0.2); color: #10b981;">Artifact: 1_model_predictions_vs_actual.png</span>
+              </div>
+              <img src="figures/1_model_predictions_vs_actual.png" alt="Model Predictions vs Actual Returns" style="width: 100%; height: auto; display: block;" />
+            </div>
+
+            <!-- Timeline Scrubber for Interactive Step-Through -->
+            <div style="margin: 1.5rem 0 0.5rem 0;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <strong style="font-size: 0.85rem; color: #cbd5e1;">Interactive Day-by-Day Timeline Inspector:</strong>
+                <span id="replay-slider-status" style="font-family: monospace; color: #38bdf8; font-weight: 700;">Day 1 / 459</span>
+              </div>
+              <input type="range" id="replay-slider" min="0" max="458" value="0" style="width: 100%; accent-color: #38bdf8; cursor: pointer;" />
+            </div>
+
+            <!-- Replay Telemetry KPIs -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 1rem;">
+              <div class="kpi-card" style="border-left: 3px solid #38bdf8;">
+                <div class="kpi-title">Selected Date</div>
+                <div class="kpi-value text-blue" id="replay-kpi-date" style="font-size: 1.25rem;">2023-01-03</div>
+                <div class="kpi-sub" id="replay-kpi-vix">VIX Level: 22.90</div>
+              </div>
+              <div class="kpi-card" style="border-left: 3px solid #10b981;">
+                <div class="kpi-title">Actual Return</div>
+                <div class="kpi-value text-green" id="replay-kpi-actual">+0.77%</div>
+                <div class="kpi-sub" id="replay-kpi-risk">Normal Day</div>
+              </div>
+              <div class="kpi-card" style="border-left: 3px solid #f472b6;">
+                <div class="kpi-title">LightGBM Pred</div>
+                <div class="kpi-value" id="replay-kpi-lgb" style="color: #f472b6;">+0.03%</div>
+                <div class="kpi-sub" id="replay-kpi-lgb-err">Residual: +0.74%</div>
+              </div>
+              <div class="kpi-card" style="border-left: 3px solid #fbbf24;">
+                <div class="kpi-title">Logistic Crash Prob</div>
+                <div class="kpi-value text-gold" id="replay-kpi-log">64.1%</div>
+                <div class="kpi-sub" id="replay-kpi-log-alert">Flag: High Risk</div>
+              </div>
+              <div class="kpi-card" style="border-left: 3px solid #a855f7;">
+                <div class="kpi-title">SVM Pred Return</div>
+                <div class="kpi-value" id="replay-kpi-svm" style="color: #c084fc;">+0.63%</div>
+                <div class="kpi-sub" id="replay-kpi-svm-err">Residual: +0.14%</div>
+              </div>
+            </div>
+
+            <!-- Interactive Chart.js Canvas -->
+            <div class="chart-container-large" style="height: 340px; margin-top: 1rem;">
+              <canvas id="replayChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: MODEL BENCHMARKS & REAL ROC GRAPH -->
+        <!-- ================================================================= -->
+        <section id="tab-scorecard" class="tab-content">
+          <div class="card">
+            <h2 class="card-title">Comprehensive ML Model Benchmarks</h2>
+            <p class="card-subtitle">
+              Strict out-of-sample evaluation across 459 test trading days (2023–2024).
+            </p>
+
+            <!-- Real ROC Curve Figure -->
+            <div class="grid-2col" style="margin-top: 1.25rem;">
+              <div style="border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #0b0f19;">
+                <div style="padding: 8px 12px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b;">
+                  <strong style="font-size: 0.85rem; color: #fbbf24;">📸 Real Generated ROC Curves (Exact Matplotlib Output)</strong>
+                </div>
+                <img src="figures/3_roc_curves_classification.png" alt="Real ROC Curves" style="width: 100%; height: auto; display: block;" />
+              </div>
+
+              <!-- Interactive Chart.js ROC Curve -->
+              <div class="score-chart-card">
+                <h3 class="chart-subhead">Interactive ROC Curve Explorer</h3>
+                <p class="chart-note">Hover over any curve to see exact True Positive Rate (TPR) and False Positive Rate (FPR).</p>
+                <div style="height: 280px;">
+                  <canvas id="rocCompareChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Regression Scorecard Table -->
+            <div style="margin-top: 1.5rem;">
+              <h3 style="font-size: 1.05rem; color: #38bdf8; margin-bottom: 0.5rem;">Task A: Continuous Next-Day Return Regression (\(y = r_{t+1}\))</h3>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Category</th>
+                      <th>Hyperparameters</th>
+                      <th>RMSE (%) &darr;</th>
+                      <th>MAE (%) &darr;</th>
+                      <th>R&sup2; Score</th>
+                      <th>Max Residual</th>
+                      <th>Std Residual</th>
+                    </tr>
+                  </thead>
+                  <tbody id="regression-scorecard-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Classification Scorecard Table -->
+            <div style="margin-top: 1.5rem;">
+              <h3 style="font-size: 1.05rem; color: #fbbf24; margin-bottom: 0.5rem;">Task B: High-Risk Crash Detection (\(r_{t+1} \le -1.60\%\))</h3>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Category</th>
+                      <th>Accuracy &uarr;</th>
+                      <th>ROC-AUC &uarr;</th>
+                      <th>Precision</th>
+                      <th>Recall (Sensitivity)</th>
+                      <th>F1-Score</th>
+                      <th>Class Weighting</th>
+                    </tr>
+                  </thead>
+                  <tbody id="classification-scorecard-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: ERROR ANALYSIS & RESIDUAL DIAGNOSTICS (REAL FIGURES) -->
+        <!-- ================================================================= -->
+        <section id="tab-errors" class="tab-content">
+          <div class="card">
+            <h2 class="card-title">Machine Learning Error Diagnostics & Real Visuals</h2>
+            <p class="card-subtitle">
+              Evaluating where models succeed and fail: residual Gaussian shapes, volatility regime errors, and confusion matrices.
+            </p>
+
+            <!-- Real Residual Histogram & Regime Error Figures -->
+            <div class="grid-2col" style="margin-top: 1.25rem;">
+              <div style="border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #0b0f19;">
+                <div style="padding: 8px 12px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b;">
+                  <strong style="font-size: 0.85rem; color: #38bdf8;">📸 Real Generated Residual Error Distribution (All 4 Models)</strong>
+                </div>
+                <img src="figures/2_residual_error_distribution.png" alt="Residual Error Distribution" style="width: 100%; height: auto; display: block;" />
+              </div>
+
+              <div style="border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #0b0f19;">
+                <div style="padding: 8px 12px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b;">
+                  <strong style="font-size: 0.85rem; color: #fbbf24;">📸 Real Error Progression Across Volatility Regimes</strong>
+                </div>
+                <img src="figures/6_regime_error_analysis.png" alt="Regime Error Analysis" style="width: 100%; height: auto; display: block;" />
+              </div>
+            </div>
+
+            <!-- Real Confusion Matrix Heatmaps -->
+            <div style="margin-top: 1.5rem; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; background: #0b0f19;">
+              <div style="padding: 8px 12px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b;">
+                <strong style="font-size: 0.85rem; color: #10b981;">📸 Real Out-of-Sample Confusion Matrix Heatmaps (4 Classifiers)</strong>
+              </div>
+              <img src="figures/5_confusion_matrix_heatmaps.png" alt="Confusion Matrix Heatmaps" style="width: 100%; height: auto; display: block;" />
+            </div>
+
+            <!-- Interactive Confusion Matrix Threshold Slider -->
+            <div style="margin-top: 1.5rem; background: var(--bg-inset); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+              <div class="card-header" style="flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <h3 class="chart-subhead" style="margin: 0; font-size: 1.1rem; color: #f1f5f9;">Interactive Live Confusion Matrix Simulator</h3>
+                  <p class="chart-note">Slide threshold from 0.10 to 0.90 to observe trade-offs between False Alarms and Missed Crashes.</p>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                  <select id="cm-model-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
+                    <option value="Logistic Regression" selected>Logistic Regression</option>
+                    <option value="LightGBM Ensembles">LightGBM Classifier</option>
+                    <option value="Support Vector Machine">SVM Classifier (SVC RBF)</option>
+                    <option value="Decision Tree">Decision Tree Classifier</option>
+                  </select>
+
+                  <div style="display: flex; align-items: center; gap: 8px; background: rgba(15,23,42,0.8); padding: 4px 10px; border-radius: 6px; border: 1px solid #334155;">
+                    <span style="font-size: 0.78rem; color: #94a3b8;">Threshold:</span>
+                    <input type="range" id="cm-threshold-slider" min="0.10" max="0.90" step="0.02" value="0.50" style="width: 110px; accent-color: #38bdf8;" />
+                    <span id="cm-threshold-val" style="font-family: monospace; font-size: 0.8rem; color: #38bdf8; font-weight: 700;">0.50</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2x2 Matrix Display -->
+              <div class="grid-2col">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <div style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 6px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; color: #10b981; font-weight: 700;">True Negative (TN)</div>
+                    <div id="cm-tn" style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin: 4px 0;">349</div>
+                    <div style="font-size: 0.72rem; color: #94a3b8;">Calm day correctly predicted normal</div>
+                  </div>
+
+                  <div style="background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 6px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; color: #fbbf24; font-weight: 700;">False Positive (FP)</div>
+                    <div id="cm-fp" style="font-size: 1.8rem; font-weight: 800; color: #fbbf24; margin: 4px 0;">96</div>
+                    <div style="font-size: 0.72rem; color: #94a3b8;">False alarm (hedged proactively)</div>
+                  </div>
+
+                  <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; color: #ef4444; font-weight: 700;">False Negative (FN)</div>
+                    <div id="cm-fn" style="font-size: 1.8rem; font-weight: 800; color: #ef4444; margin: 4px 0;">3</div>
+                    <div style="font-size: 0.72rem; color: #94a3b8;">Missed crash! Dangerous tail drop</div>
+                  </div>
+
+                  <div style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); border-radius: 6px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; color: #38bdf8; font-weight: 700;">True Positive (TP)</div>
+                    <div id="cm-tp" style="font-size: 1.8rem; font-weight: 800; color: #38bdf8; margin: 4px 0;">11</div>
+                    <div style="font-size: 0.72rem; color: #94a3b8;">Successful crash alert hedged</div>
+                  </div>
+                </div>
+
+                <!-- Live Derived Metrics -->
+                <div style="display: flex; flex-direction: column; justify-content: space-between; background: rgba(15,23,42,0.6); padding: 14px; border-radius: 6px; border: 1px solid #1e293b;">
+                  <div>
+                    <h4 style="font-size: 0.88rem; color: #cbd5e1; margin-bottom: 10px;">Classification Performance at Threshold:</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                      <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8;">Accuracy</div>
+                        <div id="cm-metric-acc" style="font-size: 1.15rem; font-weight: 700; color: #f1f5f9;">78.4%</div>
+                      </div>
+                      <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8;">Precision</div>
+                        <div id="cm-metric-prec" style="font-size: 1.15rem; font-weight: 700; color: #fbbf24;">10.3%</div>
+                      </div>
+                      <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8;">Recall (Sensitivity)</div>
+                        <div id="cm-metric-rec" style="font-size: 1.15rem; font-weight: 700; color: #38bdf8;">78.6%</div>
+                      </div>
+                      <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8;">Specificity</div>
+                        <div id="cm-metric-spec" style="font-size: 1.15rem; font-weight: 700; color: #10b981;">78.4%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155; font-size: 0.75rem; color: #94a3b8;">
+                    <strong>F1-Score:</strong> <span id="cm-metric-f1" style="font-weight: 700; color: #f472b6;">0.18</span> &bull; 
+                    <strong>False Alarm Rate:</strong> <span id="cm-metric-fpr" style="font-weight: 700; color: #fbbf24;">21.6%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 5: 22-FEATURE ENGINEERING CATALOG (WITH REAL FIGURE) -->
+        <!-- ================================================================= -->
+        <section id="tab-features" class="tab-content">
+          <div class="grid-2col">
+            <!-- Real Feature Importance Figure -->
+            <div class="card" style="padding: 0; overflow: hidden;">
+              <div style="padding: 10px 14px; background: rgba(15,23,42,0.8); border-bottom: 1px solid #1e293b;">
+                <strong style="font-size: 0.85rem; color: #38bdf8;">📸 Real Generated Feature Importance Ranking</strong>
+              </div>
+              <img src="figures/4_feature_importance_ranking.png" alt="Feature Importance Ranking" style="width: 100%; height: auto; display: block;" />
+            </div>
+
+            <!-- Feature Groups Summary Card -->
+            <div class="card">
+              <h3 class="card-title" style="font-size: 1.1rem;">Engineered Feature Taxonomy</h3>
+              <p class="card-subtitle">Four distinct mathematical groups designed for 1-day risk modeling.</p>
+
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 1rem;">
+                <div style="background: rgba(15,23,42,0.6); border: 1px solid #1e293b; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 10px 12px;">
+                  <strong style="color: #38bdf8; font-size: 0.85rem;">Group 1: Price Action & Momentum (8 Features)</strong>
+                  <p style="font-size: 0.75rem; color: #94a3b8; margin: 4px 0 0 0;">
+                    <code>ret</code>, <code>ret_lag_1</code> .. <code>ret_lag_5</code>, <code>ret_21d</code>, <code>drawdown_60d</code>.
+                  </p>
+                </div>
+
+                <div style="background: rgba(15,23,42,0.6); border: 1px solid #1e293b; border-left: 3px solid #10b981; border-radius: 6px; padding: 10px 12px;">
+                  <strong style="color: #10b981; font-size: 0.85rem;">Group 2: Multi-Scale Realized Volatility (5 Features)</strong>
+                  <p style="font-size: 0.75rem; color: #94a3b8; margin: 4px 0 0 0;">
+                    <code>vol_5d</code>, <code>vol_20d</code>, <code>vol_60d</code>, <code>vol_ratio</code>, <code>ewma_vol</code>.
+                  </p>
+                </div>
+
+                <div style="background: rgba(15,23,42,0.6); border: 1px solid #1e293b; border-left: 3px solid #fbbf24; border-radius: 6px; padding: 10px 12px;">
+                  <strong style="color: #fbbf24; font-size: 0.85rem;">Group 3: High-Frequency Volatility (2 Features)</strong>
+                  <p style="font-size: 0.75rem; color: #94a3b8; margin: 4px 0 0 0;">
+                    <code>parkinson_vol</code>, <code>parkinson_vol_10d</code> (Extracted from High and Low prices).
+                  </p>
+                </div>
+
+                <div style="background: rgba(15,23,42,0.6); border: 1px solid #1e293b; border-left: 3px solid #c084fc; border-radius: 6px; padding: 10px 12px;">
+                  <strong style="color: #c084fc; font-size: 0.85rem;">Group 4: Distribution Geometry & Macro (7 Features)</strong>
+                  <p style="font-size: 0.75rem; color: #94a3b8; margin: 4px 0 0 0;">
+                    <code>skew_30d</code>, <code>kurt_30d</code>, <code>hist_var_95_60d</code>, <code>beta_60d</code>, <code>vix_level</code>, <code>vix_change_5d</code>, <code>rel_volume_20d</code>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Master Feature Table -->
+          <div class="card" style="margin-top: 1.25rem;">
+            <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h3 class="card-title" style="font-size: 1.15rem;">Complete 22-Feature Catalog & Statistical Summary</h3>
+                <p class="card-subtitle">Exact formulas, mathematical descriptions, and empirical distributions.</p>
+              </div>
+
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="feat-search-input" placeholder="Search feature code or name..." style="background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 4px; padding: 4px 10px; font-size: 0.8rem;" />
+                <select id="feat-group-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
+                  <option value="all">All Groups</option>
+                  <option value="Price Action & Momentum">Price Action & Momentum</option>
+                  <option value="Volatility Dynamics">Volatility Dynamics</option>
+                  <option value="High-Frequency Volatility">High-Frequency Volatility</option>
+                  <option value="Distribution Geometry">Distribution Geometry</option>
+                  <option value="Market Regime & Macro">Market Regime & Macro</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Feature Key</th>
+                    <th>Display Name</th>
+                    <th>Group</th>
+                    <th>Formula</th>
+                    <th>Mean</th>
+                    <th>Std Dev</th>
+                    <th>Min</th>
+                    <th>Median</th>
+                    <th>Max</th>
+                  </tr>
+                </thead>
+                <tbody id="feature-catalog-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 6: ML FOUNDATIONS & VIVA DEFENSE GUIDE -->
+        <!-- ================================================================= -->
+        <section id="tab-theory" class="tab-content">
+          <div class="card">
+            <h2 class="card-title">Machine Learning Foundations & Viva Defense Guide</h2>
+            <p class="card-subtitle">
+              Comprehensive conceptual derivations prepared for the ES 335 Machine Learning examination.
+            </p>
+
+            <div class="viva-accordion">
+              <div class="accordion-item">
+                <div class="accordion-header">
+                  <h3>1. Dual Task Formulation: Return Regression vs Tail Risk Classification</h3>
+                  <span class="acc-icon">+</span>
+                </div>
+                <div class="accordion-body">
+                  <p>In standard financial econometric literature, risk is often framed as parametric volatility (\(\sigma\)). In our Machine Learning framework, we formulate market risk directly through two supervised machine learning tasks on a <strong>1-Day Horizon</strong>:</p>
+                  <ul>
+                    <li><strong>Task A (Supervised Regression):</strong> Predict the next-day logarithmic return \(y_{\text{reg}, t} = r_{t+1} = \ln(P_{t+1} / P_t) \times 100\). Loss function: Mean Squared Error \(L_{\text{MSE}} = \frac{1}{N} \sum_{i=1}^N (y_i - \hat{y}_i)^2\).</li>
+                    <li><strong>Task B (Supervised Tail Classification):</strong> Predict whether the next-day return falls into the catastrophic tail crash region \(y_{\text{cls}, t} = \mathbb{I}(r_{t+1} \le -1.60\%)\) (historical 5th percentile). Loss function: Binary Cross-Entropy with balanced class weighting.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header">
+                  <h3>2. Linear Regression with L2 Regularization (Ridge Regression)</h3>
+                  <span class="acc-icon">+</span>
+                </div>
+                <div class="accordion-body">
+                  <p>Ordinary Least Squares (OLS) minimizes the residual sum of squares: \(\min_{\mathbf{w}} \|\mathbf{y} - \mathbf{X}\mathbf{w}\|_2^2\). When features exhibit strong multicollinearity (such as \(\sigma_{5d}\), \(\sigma_{20d}\), and \(\sigma_{60d}\)), \((\mathbf{X}^T\mathbf{X})\) becomes ill-conditioned with eigenvalues close to zero, causing extreme coefficient variance.</p>
+                  <p>Ridge Regression adds an \(L_2\) penalty on weight magnitudes:</p>
+                  <div class="math-block">
+                    $$\mathcal{L}_{\text{Ridge}}(\mathbf{w}) = \frac{1}{2N} \|\mathbf{y} - \mathbf{X}\mathbf{w}\|_2^2 + \frac{\alpha}{2} \|\mathbf{w}\|_2^2 \implies \mathbf{w}^* = (\mathbf{X}^T\mathbf{X} + \alpha \mathbf{I})^{-1} \mathbf{X}^T \mathbf{y}$$
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header">
+                  <h3>3. Non-Parametric Recursive Partitioning: Decision Trees (CART)</h3>
+                  <span class="acc-icon">+</span>
+                </div>
+                <div class="accordion-body">
+                  <p>Classification and Regression Trees (CART) partition the feature space into hyper-rectangles \(R_m\). At each node, the algorithm greedily searches for the optimal feature \(j\) and split point \(s\) that maximizes impurity reduction:</p>
+                  <p><strong>For Regression:</strong> Splitting minimizes total variance (Mean Squared Error):</p>
+                  <div class="math-block">
+                    $$\min_{j, s} \left[ \sum_{i \in R_1(j, s)} (y_i - \bar{y}_{R_1})^2 + \sum_{i \in R_2(j, s)} (y_i - \bar{y}_{R_2})^2 \right]$$
+                  </div>
+                  <p><strong>For Classification:</strong> Splitting minimizes Gini Impurity \(I_G(p) = 1 - \sum_{k=0}^1 p_k^2\).</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header">
+                  <h3>4. Kernel Margin Optimization: Support Vector Machines (SVR & SVC)</h3>
+                  <span class="acc-icon">+</span>
+                </div>
+                <div class="accordion-body">
+                  <p>Support Vector Machines map feature vectors into a reproducing kernel Hilbert space (RKHS) via the non-linear Gaussian Radial Basis Function (RBF) kernel:</p>
+                  <div class="math-block">
+                    $$K(\mathbf{x}, \mathbf{x}') = \exp\left(-\gamma \|\mathbf{x} - \mathbf{x}'\|^2\right)$$
+                  </div>
+                  <p>Errors smaller than Vapnik's \(\varepsilon\)-insensitive threshold incur zero loss, giving SVR exceptional robustness against daily market noise.</p>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <div class="accordion-header">
+                  <h3>5. Probabilistic Classification: Logistic Regression with Balanced Loss</h3>
+                  <span class="acc-icon">+</span>
+                </div>
+                <div class="accordion-body">
+                  <p>Logistic Regression models the posterior probability of a high-risk tail event via the standard logistic sigmoid link function:</p>
+                  <div class="math-block">
+                    $$P(y = 1 \mid \mathbf{x}) = \sigma(\mathbf{w}^T\mathbf{x} + b) = \frac{1}{1 + e^{-(\mathbf{w}^T\mathbf{x} + b)}}$$
+                  </div>
+                  <p>We handle the 95:5 class imbalance by applying inverse-frequency sample weights \(w_k = \frac{N}{2 N_k}\) (\(\approx 19:1\)), heavily penalizing missed tail crashes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Footer -->
+      <footer class="app-footer">
+        <div class="footer-container">
+          <p>
+            <strong>ES 335 — Machine Learning</strong> | Indian Institute of Technology Gandhinagar<br />
+            Project Team: Siddharth Dangi (25110300) & Aryan Vatsa Chauhan (25110059)
+          </p>
+          <p class="footer-sub">
+            Hosted on GitHub Pages &bull; Open-Source MIT License &bull; 1-Day Horizon Machine Learning System
+          </p>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Interactive JavaScript Engine -->
+  <script src="app.js?v=3.5"></script>
+</body>
+</html>

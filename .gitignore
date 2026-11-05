@@ -1,0 +1,26 @@
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Temp
+*.log
+tmp/
+.ipynb_checkpoints/
+
+# User images (not tracked in repo)
+images/
+
