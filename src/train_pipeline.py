@@ -1,194 +1,213 @@
 """
 src/train_pipeline.py
 =============================================================================
-Machine Learning Training, Validation & Benchmarking Pipeline
-Course: ES 335 - Machine Learning
+End-to-end, leakage-safe training and evaluation.
+
+  1. Load prices, run data-quality checks
+  2. Build the asset-day modelling table (features at t, target over t+1..t+20)
+  3. Chronological split with a 20-day embargo: train 2012-2020,
+     validation 2021-2022, test 2023-2024
+  4. Stage 1  screen 5 model families with expanding-window CV on train only
+  5. Stage 2  tune the winning family on the validation split
+  6. Stage 3  refit winner on train+validation, evaluate ONCE on test against
+              the baselines, with block-bootstrap confidence intervals
+  7. Save the final model (used by src/inference.py) and all metrics
 =============================================================================
-Orchestrates:
-  1. Data ingestion & 22-feature matrix engineering.
-  2. Chronological Walk-Forward train/val/test splits (2012-21, 2022, 2023-24).
-  3. Feature scaling via StandardScaler.
-  4. Model fitting for:
-     - Linear Regression (Ridge)
-     - Decision Tree (CART)
-     - Support Vector Machine (SVR / SVC RBF)
-     - Logistic Regression Classifier
-     - LightGBM Gradient Boosted Trees
-  5. Multi-metric evaluation (RMSE, MAE, R2, Accuracy, F1, ROC-AUC, Confusion Matrix).
-  6. Residual error distributions and volatility regime error analysis.
-  7. Artifact serialization.
 """
 
-import logging
 import json
+import logging
+import platform
 import sys
+import time
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
 
-# Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-from sklearn.preprocessing import StandardScaler
+import sklearn
+from sklearn.inspection import permutation_importance
 
-from src.config import CONFIG, ARTIFACTS_DIR
-from src.data_loader import load_raw_market_data
-from src.feature_engineering import build_ml_feature_dataset, FEATURE_METADATA
-from src.models.ml_models import (
-    LinearRegressionRiskModel,
-    DecisionTreeRiskModel,
-    SVMRiskModel,
-    LogisticRiskClassifier,
-    LightGBMRiskModel
-)
-from src.evaluation import (
-    compute_regression_metrics,
-    compute_classification_metrics,
-    compute_regime_error_breakdown
-)
+from src.config import ARTIFACTS_DIR, CONFIG
+from src.data_loader import clean_and_check, load_prices
+from src.evaluation import block_bootstrap_compare, regime_breakdown, regression_metrics
+from src.feature_engineering import FEATURE_INFO, build_model_table
+from src.model_selection import make_splits, screen_families, split_summary, tune_on_validation
+from src.models.ml_models import PRIMARY_BASELINE, make_baselines, make_model
 
 logger = logging.getLogger(__name__)
 
 
-def run_full_pipeline() -> Tuple[Dict[str, Any], pd.DataFrame]:
-    """Executes the complete machine learning pipeline and returns performance results."""
-    logger.info("=" * 70)
-    logger.info("EXECUTING 1-DAY RISK PREDICTION MACHINE LEARNING PIPELINE")
-    logger.info("Models: Linear Regression, Decision Tree, SVM, Logistic Regression, LightGBM")
-    logger.info("=" * 70)
+def _r(x, k=4):
+    if isinstance(x, dict):
+        return {a: _r(b, k) for a, b in x.items()}
+    if isinstance(x, list):
+        return [_r(v, k) for v in x]
+    if isinstance(x, (float, np.floating)):
+        return round(float(x), k)
+    return x
 
-    # 1. Ingest raw data & build 22 features
-    raw_data = load_raw_market_data(use_cache=True)
-    df, feature_cols = build_ml_feature_dataset(raw_data)
 
-    # 2. Chronological Splits
-    train_mask = df.index < "2022-01-01"
-    val_mask = (df.index >= "2022-01-01") & (df.index < "2023-01-01")
-    test_mask = df.index >= "2023-01-01"
+def run_full_pipeline(refresh_data: bool = False) -> Tuple[Dict[str, Any], pd.DataFrame]:
+    t_start = time.perf_counter()
+    np.random.seed(CONFIG.SEED)
 
-    X_train_raw = df.loc[train_mask, feature_cols].values
-    X_val_raw = df.loc[val_mask, feature_cols].values
-    X_test_raw = df.loc[test_mask, feature_cols].values
+    # 1-2. Data
+    prices, quality = clean_and_check(load_prices(refresh=refresh_data))
+    table, feats, assets = build_model_table(prices)
+    splits = make_splits(table)
+    sizes = split_summary(splits)
+    logger.info(f"Assets: {assets}")
+    for k, v in sizes.items():
+        logger.info(f"  {k:<5}: {v['start']} -> {v['end']}  {v['dates']} days, {v['rows']} rows")
 
-    # Target values (Returns in %, High Risk in 0/1)
-    y_reg_train = df.loc[train_mask, "target_next_ret"].values
-    y_reg_val = df.loc[val_mask, "target_next_ret"].values
-    y_reg_test = df.loc[test_mask, "target_next_ret"].values
+    train, val, trval, test = splits["train"], splits["val"], splits["train_val"], splits["test"]
+    y_te = test["target_vol_20d"].to_numpy()
 
-    y_cls_train = df.loc[train_mask, "target_high_risk"].values
-    y_cls_val = df.loc[val_mask, "target_high_risk"].values
-    y_cls_test = df.loc[test_mask, "target_high_risk"].values
+    # 3. Stage 1: screening with CV on the training period only
+    logger.info("Stage 1 - screening all candidate families with expanding-window CV (training data only)")
+    screening = screen_families(train, feats)
+    family = screening["selected_family"]
+    logger.info(f"  -> selected family: {family}")
 
-    vix_test = df.loc[test_mask, "vix_level"].values
-    test_dates = [d.strftime("%Y-%m-%d") for d in df.loc[test_mask].index]
+    # 4. Stage 2: tune the selected family on validation
+    logger.info(f"Stage 2 - tuning {family} on the validation split")
+    tuning = tune_on_validation(family, train, val, feats)
+    best_params = tuning["best_params"]
 
-    logger.info(f"Splits -> Train: {len(X_train_raw)}, Val: {len(X_val_raw)}, Test: {len(X_test_raw)}")
+    # Validation comparison (for the report): tuned model vs baselines, all fit on train
+    val_model = make_model(family, best_params).fit(train[feats].to_numpy(), train["target_vol_20d"].to_numpy())
+    val_table = {f"{family} (tuned)": regression_metrics(val["target_vol_20d"], val_model.predict(val[feats].to_numpy()))}
+    for b in make_baselines():
+        b.fit(train, train["target_vol_20d"].to_numpy())
+        val_table[b.name] = regression_metrics(val["target_vol_20d"], b.predict(val))
 
-    # 3. Standardize features
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train_raw)
-    X_val = scaler.transform(X_val_raw)
-    X_test = scaler.transform(X_test_raw)
+    # 5. Stage 3: refit on train+val, single evaluation on test
+    logger.info("Stage 3 - refitting on train+validation and evaluating once on the test split")
+    t0 = time.perf_counter()
+    final_model = make_model(family, best_params)
+    final_model.fit(trval[feats].to_numpy(), trval["target_vol_20d"].to_numpy())
+    fit_secs = time.perf_counter() - t0
+    p_final = final_model.predict(test[feats].to_numpy())
 
-    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    scaler_path = ARTIFACTS_DIR / "feature_scaler.joblib"
-    joblib.dump(scaler, scaler_path)
-    logger.info(f"Saved feature scaler to: {scaler_path}")
+    # Training sanity checks - evidence that fitting really happens and that
+    # the model learns signal from the features (not just a constant):
+    #  (a) learned coefficients of the final model (linear families only)
+    #  (b) the same model trained on SHUFFLED targets must do much worse
+    inner = getattr(final_model, "regressor_", final_model)
+    est = inner.named_steps["model"]
+    coefs = ({f: float(c) for f, c in sorted(zip(feats, est.coef_), key=lambda t: -abs(t[1]))}
+             if hasattr(est, "coef_") else None)
+    rng = np.random.default_rng(CONFIG.SEED)
+    shuffled = make_model(family, best_params).fit(trval[feats].to_numpy(),
+                                                   rng.permutation(trval["target_vol_20d"].to_numpy()))
+    shuffled_rmse = regression_metrics(y_te, shuffled.predict(test[feats].to_numpy()))["RMSE"]
+    n_fits = sum(r["fits"] for r in screening["results"]) + tuning["n_configs"] + 2
+    training_proof = {
+        "total_model_fits": n_fits,
+        "training_rows_final_fit": int(len(trval)), "n_features": len(feats),
+        "final_fit_seconds": round(fit_secs, 4),
+        "why_fast": "Ridge has a closed-form solution (one linear solve on a ~10k x 22 matrix), so a fit takes milliseconds; "
+                    "the slowest family (SVR) takes seconds. Speed reflects data size and model class, not skipped training.",
+        "shuffled_target_test_RMSE": shuffled_rmse,
+        "real_target_test_RMSE": float(np.sqrt(np.mean((p_final - y_te) ** 2))),
+        "learned_coefficients_scaled_log_space": coefs,
+        "smearing_factor": float(getattr(final_model, "smearing_", 1.0)),
+    }
+    logger.info(f"  [proof] {n_fits} model fits in total; final fit {fit_secs * 1000:.1f} ms on {len(trval)} rows. "
+                f"Test RMSE real labels {training_proof['real_target_test_RMSE']:.3f} vs shuffled labels {shuffled_rmse:.3f}")
 
-    # 4. Model 1: Linear Regression (Ridge)
-    logger.info("Training Model 1: Linear Regression (Ridge)...")
-    lr_model = LinearRegressionRiskModel(alpha=1.0)
-    lr_model.fit(X_train, y_reg_train)
-    p_lr_reg = lr_model.predict(X_test)
-    joblib.dump(lr_model, ARTIFACTS_DIR / "best_linear_regression.joblib")
+    preds = {f"{family} (final)": p_final}
+    # Sensitivity: the same tuned model trained on the training split only
+    preds[f"{family} (train-only fit)"] = val_model.predict(test[feats].to_numpy())
+    for b in make_baselines():
+        b.fit(trval, trval["target_vol_20d"].to_numpy())
+        preds[b.name] = b.predict(test)
+    model_key = f"{family} (final)"
 
-    # 5. Model 2: Decision Tree (CART)
-    logger.info("Training Model 2: Decision Tree Regressor & Classifier...")
-    dt_model = DecisionTreeRiskModel(max_depth=4, min_samples_leaf=20)
-    dt_model.fit(X_train, y_reg_train, y_cls_train)
-    p_dt_reg, p_dt_cls, p_dt_prob = dt_model.predict(X_test)
-    joblib.dump(dt_model, ARTIFACTS_DIR / "best_decision_tree.joblib")
+    test_table = {k: regression_metrics(y_te, v) for k, v in preds.items()}
+    for k, v in test_table.items():
+        logger.info(f"  [test] {k:<34} RMSE {v['RMSE']:.3f}  MAE {v['MAE']:.3f}  R2 {v['R2']:.3f}  QLIKE {v['QLIKE']:.4f}")
 
-    # 6. Model 3: Support Vector Machine (SVR & SVC with RBF)
-    logger.info("Training Model 3: Support Vector Machine (RBF kernel)...")
-    svm_model = SVMRiskModel(C=1.0, epsilon=0.1)
-    svm_model.fit(X_train, y_reg_train, y_cls_train)
-    p_svm_reg, p_svm_cls, p_svm_prob = svm_model.predict(X_test)
-    joblib.dump(svm_model, ARTIFACTS_DIR / "best_svm_model.joblib")
+    boot = {b: block_bootstrap_compare(test.index, y_te, p_final, preds[b])
+            for b in (PRIMARY_BASELINE, "Historical average", "EWMA vol (RiskMetrics)")}
 
-    # 7. Model 4: Logistic Regression Classifier
-    logger.info("Training Model 4: Logistic Regression Classifier...")
-    log_model = LogisticRiskClassifier(C=1.0)
-    log_model.fit(X_train, y_cls_train)
-    p_log_cls, p_log_prob = log_model.predict(X_test)
-    joblib.dump(log_model, ARTIFACTS_DIR / "best_logistic_regression.joblib")
+    per_asset = {}
+    for a in assets:
+        m = (test["asset"] == a).to_numpy()
+        per_asset[a] = {k: regression_metrics(y_te[m], v[m]) for k, v in preds.items()
+                        if k in (model_key, PRIMARY_BASELINE, "Historical average", "EWMA vol (RiskMetrics)")}
 
-    # 8. Model 5: LightGBM Gradient Boosted Trees
-    logger.info("Training Model 5: LightGBM Gradient Boosted Trees...")
-    lgbm_model = LightGBMRiskModel(n_estimators=100, learning_rate=0.03, max_depth=4)
-    lgbm_model.fit(X_train, y_reg_train, y_cls_train)
-    p_lgb_reg, p_lgb_cls, p_lgb_prob = lgbm_model.predict(X_test)
-    joblib.dump(lgbm_model, ARTIFACTS_DIR / "best_lightgbm_model.joblib")
+    vix_terciles = list(np.quantile(train["vix_level"], [1 / 3, 2 / 3]))
+    regimes = regime_breakdown(test, {k: preds[k] for k in (model_key, PRIMARY_BASELINE, "Historical average")}, vix_terciles)
 
-    # 9. Evaluate All Models
-    logger.info("Computing evaluation metrics and error distributions...")
+    # Representative errors: largest misses of the final model
+    err = pd.DataFrame({"date": test.index.strftime("%Y-%m-%d"), "asset": test["asset"].values,
+                        "actual": y_te, "predicted": p_final, "baseline": preds[PRIMARY_BASELINE],
+                        "vix": test["vix_level"].values})
+    err["error"] = err["predicted"] - err["actual"]
+    worst = err.reindex(err["error"].abs().sort_values(ascending=False).index)
+    worst = worst.drop_duplicates(subset=["asset", "date"]).head(40)
+    # keep one example per (asset, month) so the list is not 20 copies of the same episode
+    worst["month"] = worst["date"].str[:7]
+    worst = worst.drop_duplicates(subset=["asset", "month"]).head(8).drop(columns="month")
+
+    # Permutation importance on the test split (interpretation only, not selection)
+    pi = permutation_importance(final_model, test[feats].to_numpy(), y_te, n_repeats=5,
+                                random_state=CONFIG.SEED, scoring="neg_root_mean_squared_error")
+    importance = sorted(({"feature": f, "importance": float(m), "std": float(s)}
+                         for f, m, s in zip(feats, pi.importances_mean, pi.importances_std)),
+                        key=lambda d: -d["importance"])
+
+    # 6. Save artifacts
+    bundle = {"model": final_model, "family": family, "params": best_params, "features": feats,
+              "assets": assets, "trained_through": trval.index.max().strftime("%Y-%m-%d"),
+              "horizon": CONFIG.HORIZON, "sklearn_version": sklearn.__version__}
+    joblib.dump(bundle, ARTIFACTS_DIR / "final_model.joblib")
+
+    out = test[["asset", "vix_level", "vol_20d", "ewma_vol", "target_vol_20d"]].copy()
+    for k, v in preds.items():
+        out[f"pred::{k}"] = v
+    out.to_csv(ARTIFACTS_DIR / "test_predictions.csv", index_label="Date")
 
     results = {
-        "Linear Regression": {
-            "type": "Regression",
-            "category": "Linear Parametric Model",
-            "regression_metrics": compute_regression_metrics(y_reg_test, p_lr_reg),
-            "regime_errors": compute_regime_error_breakdown(y_reg_test, p_lr_reg, vix_test),
-            "coefficients": lr_model.get_coefficients(feature_cols),
-            "predictions_sample": [round(float(p), 2) for p in p_lr_reg[:50]],
-        },
-        "Decision Tree": {
-            "type": "Dual (Regression + Classification)",
-            "category": "Non-Parametric Partitioning",
-            "regression_metrics": compute_regression_metrics(y_reg_test, p_dt_reg),
-            "classification_metrics": compute_classification_metrics(y_cls_test, p_dt_cls, p_dt_prob),
-            "regime_errors": compute_regime_error_breakdown(y_reg_test, p_dt_reg, vix_test),
-            "feature_importances": dt_model.get_feature_importances(feature_cols),
-            "predictions_sample": [round(float(p), 2) for p in p_dt_reg[:50]],
-        },
-        "Support Vector Machine": {
-            "type": "Dual (SVR + SVC RBF)",
-            "category": "Kernel Margin Optimization",
-            "regression_metrics": compute_regression_metrics(y_reg_test, p_svm_reg),
-            "classification_metrics": compute_classification_metrics(y_cls_test, p_svm_cls, p_svm_prob),
-            "regime_errors": compute_regime_error_breakdown(y_reg_test, p_svm_reg, vix_test),
-            "predictions_sample": [round(float(p), 2) for p in p_svm_reg[:50]],
-        },
-        "Logistic Regression": {
-            "type": "Classification",
-            "category": "Probabilistic Classifier",
-            "classification_metrics": compute_classification_metrics(y_cls_test, p_log_cls, p_log_prob),
-            "coefficients": log_model.get_coefficients(feature_cols),
-            "predicted_probabilities_sample": [round(float(p), 3) for p in p_log_prob[:50]],
-        },
-        "LightGBM Ensembles": {
-            "type": "Dual (Regression + Classification)",
-            "category": "Gradient Boosted Decision Trees",
-            "regression_metrics": compute_regression_metrics(y_reg_test, p_lgb_reg),
-            "classification_metrics": compute_classification_metrics(y_cls_test, p_lgb_cls, p_lgb_prob),
-            "regime_errors": compute_regime_error_breakdown(y_reg_test, p_lgb_reg, vix_test),
-            "feature_importances": lgbm_model.get_feature_importances(feature_cols),
-            "predictions_sample": [round(float(p), 2) for p in p_lgb_reg[:50]],
-        },
+        "task": {"target": "annualised realised volatility (%) over the next 20 trading days",
+                 "unit": "one asset on one trading day", "horizon_days": CONFIG.HORIZON,
+                 "prediction_time": "after the close of day t; features use prices up to and including t"},
+        "data": {"assets": assets, "asset_descriptions": {a: CONFIG.ASSETS.get(a, a) for a in assets},
+                 "quality": quality, "n_rows_model_table": int(len(table)), "features": feats},
+        "splits": sizes,
+        "stage1_screening": screening,
+        "stage2_tuning": {k: v for k, v in tuning.items() if k != "trials"} | {"top_trials": tuning["trials"][:15]},
+        "validation_comparison": val_table,
+        "final_model": {"family": family, "params": best_params, "trained_on": "train + validation",
+                        "trained_through": bundle["trained_through"], "fit_seconds": round(fit_secs, 2)},
+        "training_proof": training_proof,
+        "test_metrics": test_table,
+        "test_bootstrap_vs_baselines": boot,
+        "test_per_asset": per_asset,
+        "test_regimes": regimes,
+        "vix_regime_thresholds_from_train": vix_terciles,
+        "representative_errors": worst.to_dict(orient="records"),
+        "permutation_importance_test": importance,
+        "feature_info": {k: list(v) for k, v in FEATURE_INFO.items()},
+        "reproducibility": {"seed": CONFIG.SEED, "python": platform.python_version(),
+                            "sklearn": sklearn.__version__, "pandas": pd.__version__, "numpy": np.__version__,
+                            "runtime_seconds": round(time.perf_counter() - t_start, 1)},
     }
-
-    # Save metrics JSON to artifacts
-    metrics_path = ARTIFACTS_DIR / "evaluation_metrics.json"
-    with open(metrics_path, "w") as f:
-        json.dump(results, f, indent=2)
-    logger.info(f"Evaluation metrics written to: {metrics_path}")
-
-    return results, df
+    results = _r(results)
+    (ARTIFACTS_DIR / "evaluation_metrics.json").write_text(json.dumps(results, indent=2, default=str))
+    logger.info(f"Pipeline finished in {results['reproducibility']['runtime_seconds']}s")
+    return results, table
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
-    run_full_pipeline()
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--refresh-data", action="store_true")
+    run_full_pipeline(ap.parse_args().refresh_data)

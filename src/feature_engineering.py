@@ -1,25 +1,21 @@
 """
 src/feature_engineering.py
 =============================================================================
-Machine Learning Feature Engineering Pipeline: 1-Day Stock Risk Forecasting
-Course: ES 335 - Machine Learning
+Builds the modelling table: one row = one asset on one trading day t.
+
+Every feature uses prices up to and including the close of day t (rolling
+windows look backwards only). The target uses days t+1 ... t+20 only.
+
+Target
+  target_vol_20d : annualised realised volatility (%) of daily log returns
+                   over the next 20 trading days
+                   = std(r_{t+1..t+20}) * sqrt(252) * 100
 =============================================================================
-Constructs the 22 engineered features and 1-day prediction targets directly
-from the 7 raw market input streams matching the user's specification:
-  - Input Columns (7): Open, High, Low, Close, Volume, Benchmark_Close, VIX
-  - Engineered Features (22):
-      ret, ret_lag_1 .. ret_lag_5, ret_21d, drawdown_60d,
-      vol_5d, vol_20d, vol_60d, vol_ratio, ewma_vol,
-      parkinson_vol, parkinson_vol_10d,
-      skew_30d, kurt_30d, hist_var_95_60d,
-      beta_60d, vix_level, vix_change_5d, rel_volume_20d
-  - Target Columns (2):
-      target_next_ret: 1-Day Forward Log Return in %
-      target_high_risk: Binary indicator (1 if next-day return <= -1.60%, bottom 5% tail loss)
 """
 
 import logging
-from typing import Dict, List, Tuple
+from typing import List, Tuple
+
 import numpy as np
 import pandas as pd
 
@@ -27,121 +23,96 @@ from src.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
-FEATURE_METADATA = {
-    "ret": "Current day's logarithmic return: ln(Close_t / Close_{t-1})",
-    "ret_lag_1": "1-day lagged logarithmic return",
-    "ret_lag_2": "2-day lagged logarithmic return",
-    "ret_lag_3": "3-day lagged logarithmic return",
-    "ret_lag_4": "4-day lagged logarithmic return",
-    "ret_lag_5": "5-day lagged logarithmic return",
-    "ret_21d": "Cumulative percentage return over the past 21 trading days (1 month)",
-    "drawdown_60d": "Percentage drawdown from the highest closing price in past 60 trading days",
-    "vol_5d": "5-day rolling realized volatility (standard deviation of daily returns)",
-    "vol_20d": "20-day rolling realized volatility",
-    "vol_60d": "60-day rolling realized volatility",
-    "vol_ratio": "Ratio of short-term volatility (vol_5d) to medium-term volatility (vol_60d)",
-    "ewma_vol": "Exponentially Weighted Moving Average volatility (alpha = 0.06)",
-    "parkinson_vol": "Single-day intraday range volatility from High and Low prices",
-    "parkinson_vol_10d": "10-day rolling average of Parkinson intraday volatility",
-    "skew_30d": "30-day rolling skewness of daily returns",
-    "kurt_30d": "30-day rolling kurtosis of daily returns",
-    "hist_var_95_60d": "60-day rolling historical 5th percentile return (empirical tail floor)",
-    "beta_60d": "60-day rolling market beta relative to benchmark index",
-    "vix_level": "Current closing level of the VIX volatility index",
-    "vix_change_5d": "5-day percentage change in the VIX index",
-    "rel_volume_20d": "Ratio of current trading volume to 20-day average volume",
+ANN = np.sqrt(CONFIG.TRADING_DAYS) * 100.0
+
+FEATURE_INFO = {
+    "ret_1d":        ("Return, today (%)", "Momentum", "Log return from close t-1 to close t."),
+    "abs_ret_1d":    ("|Return|, today (%)", "Momentum", "Size of today's move; large moves tend to be followed by large moves."),
+    "ret_5d":        ("Return, past 5 days (%)", "Momentum", "Cumulative log return over the last week."),
+    "ret_21d":       ("Return, past 21 days (%)", "Momentum", "Cumulative log return over the last month."),
+    "drawdown_60d":  ("Drawdown from 60-day high (%)", "Momentum", "How far the price is below its 60-day peak; captures the leverage effect."),
+    "vol_5d":        ("Realised vol, 5 days (%)", "Volatility", "Annualised std of the last 5 daily returns."),
+    "vol_10d":       ("Realised vol, 10 days (%)", "Volatility", "Annualised std of the last 10 daily returns."),
+    "vol_20d":       ("Realised vol, 20 days (%)", "Volatility", "Annualised std of the last 20 daily returns (= the persistence baseline)."),
+    "vol_60d":       ("Realised vol, 60 days (%)", "Volatility", "Annualised std of the last 60 daily returns."),
+    "vol_120d":      ("Realised vol, 120 days (%)", "Volatility", "Slow-moving vol level; helps with mean reversion."),
+    "ewma_vol":      ("EWMA vol, lambda=0.94 (%)", "Volatility", "RiskMetrics exponentially weighted volatility."),
+    "downside_vol_20d": ("Downside vol, 20 days (%)", "Volatility", "Annualised root-mean-square of negative returns only."),
+    "vol_ratio_5_60": ("Vol ratio 5d / 60d", "Volatility", ">1 means a recent volatility shock."),
+    "vol_change_20d": ("Vol change vs 20 days ago", "Volatility", "vol_20d today divided by vol_20d 20 days ago."),
+    "vix_level":     ("VIX level", "Market", "Implied 30-day S&P 500 volatility (market's own forecast)."),
+    "vix_change_5d": ("VIX change, 5 days (%)", "Market", "Percent change in VIX over a week."),
+    "vix_vs_60d":    ("VIX / 60-day mean", "Market", "Whether fear is high relative to its recent norm."),
+    "mkt_vol_20d":   ("SPY realised vol, 20 days (%)", "Market", "Equity-market volatility, shared by all assets."),
 }
 
 
-def build_ml_feature_dataset(
-    raw_data: pd.DataFrame,
-    primary_ticker: str = CONFIG.PRIMARY_ASSET,
-    bench_ticker: str = CONFIG.BENCHMARK_ASSET,
-    save_csv: bool = True
-) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Constructs the complete 22-feature matrix and next-day target variables from raw 7-column market data.
-    """
-    logger.info("Extracting columns for feature engineering...")
+LOG_FEATURES = ["vol_5d", "vol_10d", "vol_20d", "vol_60d", "vol_120d", "ewma_vol",
+                "downside_vol_20d", "vix_level", "mkt_vol_20d"]
 
-    if isinstance(raw_data.columns, pd.MultiIndex):
-        close = raw_data[("Close", primary_ticker)]
-        open_px = raw_data[("Open", primary_ticker)]
-        high = raw_data[("High", primary_ticker)]
-        low = raw_data[("Low", primary_ticker)]
-        volume = raw_data[("Volume", primary_ticker)]
-        bench_close = raw_data[("Close", bench_ticker)]
-        vix = raw_data[("Close", "^VIX")]
-    else:
-        close = raw_data["Close"]
-        open_px = raw_data["Open"]
-        high = raw_data["High"]
-        low = raw_data["Low"]
-        volume = raw_data["Volume"]
-        bench_close = raw_data["Benchmark_Close"]
-        vix = raw_data["VIX"]
 
-    # Daily log returns
-    ret = np.log(close / close.shift(1))
-    bench_ret = np.log(bench_close / bench_close.shift(1))
+def _asset_features(close: pd.Series, vix: pd.Series, mkt_vol20: pd.Series) -> pd.DataFrame:
+    r = np.log(close / close.shift(1))
+    f = pd.DataFrame(index=close.index)
+    f["ret_1d"] = r * 100
+    f["abs_ret_1d"] = r.abs() * 100
+    f["ret_5d"] = r.rolling(5).sum() * 100
+    f["ret_21d"] = r.rolling(21).sum() * 100
+    f["drawdown_60d"] = (close / close.rolling(60).max() - 1) * 100
+    for w in (5, 10, 20, 60, 120):
+        f[f"vol_{w}d"] = r.rolling(w).std() * ANN
+    # RiskMetrics: sigma^2_t = 0.94 sigma^2_{t-1} + 0.06 r_t^2 (zero-mean), alpha = 1 - lambda
+    f["ewma_vol"] = np.sqrt((r ** 2).ewm(alpha=0.06, adjust=False).mean()) * ANN
+    f["downside_vol_20d"] = np.sqrt((np.minimum(r, 0) ** 2).rolling(20).mean()) * ANN
+    f["vol_ratio_5_60"] = f["vol_5d"] / f["vol_60d"].clip(lower=1e-6)
+    f["vol_change_20d"] = f["vol_20d"] / f["vol_20d"].shift(20).clip(lower=1e-6)
+    f["vix_level"] = vix
+    f["vix_change_5d"] = (vix / vix.shift(5) - 1) * 100
+    f["vix_vs_60d"] = vix / vix.rolling(60).mean()
+    f["mkt_vol_20d"] = mkt_vol20
+    # Target: realised vol over the NEXT 20 days (t+1..t+20)
+    f["target_vol_20d"] = r.rolling(CONFIG.HORIZON).std().shift(-CONFIG.HORIZON) * ANN
+    # Daily return of the next day is kept for portfolio analysis only (never a feature)
+    f["next_ret"] = r.shift(-1)
+    return f
 
-    df = pd.DataFrame(index=close.index)
 
-    # 1. Log returns and lags 1 through 5
-    df["ret"] = ret
-    for k in range(1, 6):
-        df[f"ret_lag_{k}"] = ret.shift(k)
+def build_model_table(prices: pd.DataFrame, save: bool = True) -> Tuple[pd.DataFrame, List[str], List[str]]:
+    assets = [c for c in prices.columns if c != "VIX"]
+    vix = prices["VIX"]
+    mkt = "SPY" if "SPY" in assets else assets[0]
+    mkt_vol20 = np.log(prices[mkt]).diff().rolling(20).std() * ANN
 
-    # 2. Cumulative return and drawdown
-    df["ret_21d"] = (close / close.shift(21) - 1.0) * 100.0
-    df["drawdown_60d"] = (close / close.rolling(60).max() - 1.0) * 100.0
+    frames = []
+    for a in assets:
+        f = _asset_features(prices[a], vix, mkt_vol20)
+        f["asset"] = a
+        frames.append(f)
+    table = pd.concat(frames)
+    table.index.name = "Date"
 
-    # 3. Rolling volatilities
-    df["vol_5d"] = ret.rolling(5).std() * np.sqrt(252.0) * 100.0
-    df["vol_20d"] = ret.rolling(20).std() * np.sqrt(252.0) * 100.0
-    df["vol_60d"] = ret.rolling(60).std() * np.sqrt(252.0) * 100.0
-    df["vol_ratio"] = df["vol_5d"] / np.maximum(1e-4, df["vol_60d"])
+    # Volatility levels and VIX enter the models in logs: they are strictly
+    # positive and right-skewed, and with a log target this gives a log-log
+    # (HAR-style) relation, so a VIX spike cannot blow up exp(linear) forecasts.
+    # Raw columns are kept for the baselines and for display.
+    for c in LOG_FEATURES:
+        table[f"log_{c}"] = np.log(table[c].clip(lower=0.1))
+    numeric_features = [f"log_{c}" if c in LOG_FEATURES else c for c in FEATURE_INFO]
+    # Asset identity lets models learn that e.g. TLT and SPY have different vol levels.
+    asset_dummies = []
+    if len(assets) > 1:
+        for a in assets:
+            col = f"is_{a}"
+            table[col] = (table["asset"] == a).astype(float)
+            asset_dummies.append(col)
+    feature_cols = numeric_features + asset_dummies
 
-    # 4. EWMA Volatility (alpha = 0.06)
-    df["ewma_vol"] = ret.ewm(alpha=0.06).std() * np.sqrt(252.0) * 100.0
+    # Drop warm-up rows (incomplete windows). Rows with a missing target
+    # (the last 20 days) are kept separately for inference.
+    table = table.dropna(subset=feature_cols)
+    table = table.reset_index().sort_values(["Date", "asset"]).set_index("Date")
 
-    # 5. Parkinson Range Volatility
-    ratio = np.maximum(high / np.maximum(low, 1e-8), 1.0)
-    park_var = (1.0 / (4.0 * np.log(2.0))) * (np.log(ratio) ** 2)
-    df["parkinson_vol"] = np.sqrt(park_var * 252.0) * 100.0
-    df["parkinson_vol_10d"] = df["parkinson_vol"].rolling(10).mean()
-
-    # 6. Higher Moments & Empirical Quantile
-    df["skew_30d"] = ret.rolling(30).skew()
-    df["kurt_30d"] = ret.rolling(30).kurt()
-    df["hist_var_95_60d"] = ret.rolling(60).quantile(0.05) * 100.0
-
-    # 7. Rolling Beta relative to Benchmark
-    cov_60 = ret.rolling(60).cov(bench_ret)
-    var_60 = bench_ret.rolling(60).var()
-    df["beta_60d"] = cov_60 / np.maximum(1e-6, var_60)
-
-    # 8. Macro Indicators & Relative Volume
-    df["vix_level"] = vix
-    df["vix_change_5d"] = (vix / vix.shift(5) - 1.0) * 100.0
-    df["rel_volume_20d"] = volume / np.maximum(1.0, volume.rolling(20).mean())
-
-    # 9. Targets (1-Day Horizon)
-    # Next day return in percent (%)
-    df["target_next_ret"] = ret.shift(-1) * 100.0
-    
-    # High-Risk threshold (bottom 5% tail drop across training distribution)
-    # Target 1 = High Risk day, 0 = Normal day
-    q05_threshold = CONFIG.TAIL_RISK_THRESHOLD  # -1.60%
-    df["target_high_risk"] = (df["target_next_ret"] <= q05_threshold).astype(int)
-
-    # Clean out NaN warmup rows
-    clean_df = df.dropna().copy()
-    feature_cols = [c for c in clean_df.columns if not c.startswith("target_")]
-
-    if save_csv:
-        clean_df.to_csv(CONFIG.ENGINEERED_DATA_FILE, index_label="Date")
-        logger.info(f"Saved engineered dataset to: {CONFIG.ENGINEERED_DATA_FILE}")
-
-    logger.info(f"Feature matrix engineered: {clean_df.shape[0]} samples x {len(feature_cols)} features.")
-    return clean_df, feature_cols
+    if save:
+        table.to_csv(CONFIG.FEATURES_FILE, index_label="Date")
+    logger.info(f"Model table: {len(table)} asset-days, {len(feature_cols)} features, assets={assets}")
+    return table, feature_cols, assets

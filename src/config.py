@@ -1,64 +1,72 @@
 """
 src/config.py
 =============================================================================
-Configuration & Global Constants for 1-Day Risk & Return Machine Learning Platform
+Single source of truth for every choice that affects the results:
+asset universe, dates, split boundaries, forecast horizon, seeds.
 Course: ES 335 - Machine Learning (Undergraduate Track)
 Team: Siddharth Dangi (25110300) & Aryan Vatsa Chauhan (25110059)
 =============================================================================
 """
 
-import os
+from dataclasses import dataclass, field
 from pathlib import Path
-from dataclasses import dataclass
-from typing import Tuple
+from typing import Dict
 
-# Project Base Directories
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 ARTIFACTS_DIR = BASE_DIR / "artifacts"
+FIGURES_DIR = ARTIFACTS_DIR / "figures"
 DOCS_DIR = BASE_DIR / "docs"
 DOCS_DATA_DIR = DOCS_DIR / "data"
+DOCS_FIG_DIR = DOCS_DIR / "figures"
 
-for directory in [DATA_DIR, ARTIFACTS_DIR, DOCS_DIR, DOCS_DATA_DIR]:
-    os.makedirs(directory, exist_ok=True)
+for _d in (DATA_DIR, ARTIFACTS_DIR, FIGURES_DIR, DOCS_DIR, DOCS_DATA_DIR, DOCS_FIG_DIR):
+    _d.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass(frozen=True)
 class ProjectConfig:
-    """Project-wide configuration constants for 1-day ML models."""
-
-    # Deterministic Seed
     SEED: int = 42
 
-    # Target Market Assets (Exact 7-column schema)
-    PRIMARY_ASSET: str = "SPY"          # SPDR S&P 500 ETF (OHLCV)
-    BENCHMARK_ASSET: str = "QQQ"        # Invesco QQQ Trust (Benchmark Close)
-    VIX_INDEX: str = "^VIX"             # CBOE Volatility Index (Market Fear Gauge)
+    # ---- Asset universe -------------------------------------------------
+    # One row of the modelling table = one asset on one trading day.
+    # The pipeline uses every asset below that is present in data/prices.csv.
+    # Run `python scripts/run_all.py --refresh-data` to download all of them.
+    ASSETS: Dict[str, str] = field(default_factory=lambda: {
+        "SPY": "US large-cap equities (S&P 500 ETF)",
+        "QQQ": "US tech-heavy equities (Nasdaq-100 ETF)",
+        "TLT": "Long-term US Treasury bonds (20+ yr ETF)",
+        "GLD": "Gold (SPDR Gold Shares ETF)",
+    })
+    VIX_TICKER: str = "^VIX"          # market-wide implied volatility, used as a feature only
 
-    # 1-Day Prediction Horizon
-    HORIZON_DAYS: int = 1
-
-    # Date Range (2012-01-01 to 2024-10-31: 3,167 Trading Days)
     START_DATE: str = "2012-01-01"
-    END_DATE: str = "2024-10-31"
+    END_DATE: str = "2024-11-01"      # exclusive upper bound for the download
 
-    # Chronological Walk-Forward Splits (Zero Lookahead Bias)
-    TRAIN_START: str = "2012-01-01"
-    TRAIN_END: str = "2021-12-31"       # Train split: 2,457 days (~10 years)
-    VAL_START: str = "2022-01-01"
-    VAL_END: str = "2022-12-31"         # Validation split: 251 days (2022 Bear Market)
-    TEST_START: str = "2023-01-01"
-    TEST_END: str = "2024-10-31"        # Out-of-sample Test split: 459 days (2023-2024)
+    # ---- Prediction task ------------------------------------------------
+    # Target: annualised realised volatility (%) of the asset over the NEXT
+    # 20 trading days (t+1 ... t+20), using only information known at the
+    # close of day t.
+    HORIZON: int = 20
+    TRADING_DAYS: int = 252
 
-    # Risk Targets
-    # Next day return in percent: target_next_ret
-    # Extreme tail crash threshold (historical 5th percentile): -1.60%
-    TAIL_RISK_THRESHOLD: float = -1.60
+    # ---- Chronological split (dates refer to the forecast origin t) -----
+    TRAIN_END: str = "2020-12-31"     # 2012-2020: includes 2015-16, 2018 and the 2020 COVID shock
+    VAL_START: str = "2021-01-01"     # 2021 (calm) + 2022 (bear market): tuning sees both regimes
+    VAL_END: str = "2022-12-31"
+    TEST_START: str = "2023-01-01"    # 2023-2024: untouched until the single final evaluation
+    # Rows whose 20-day target window crosses a split boundary are dropped
+    # (an "embargo" of HORIZON days) so no target overlaps the next split.
 
-    # Data file paths
-    RAW_DATA_FILE: Path = DATA_DIR / "market_data_7_features.csv"
-    ENGINEERED_DATA_FILE: Path = DATA_DIR / "dataset_22_features.csv"
+    # ---- Model selection ------------------------------------------------
+    CV_FOLDS: int = 5                 # expanding-window folds inside the training period
+    PRIMARY_METRIC: str = "RMSE"      # used for every selection decision
+    BOOTSTRAP_REPS: int = 2000        # moving-block bootstrap for test-set uncertainty
+    BOOTSTRAP_BLOCK: int = 20         # block length (days) = horizon, because targets overlap
+
+    PRICES_FILE: Path = DATA_DIR / "prices.csv"
+    LEGACY_FILE: Path = DATA_DIR / "market_data_7_features.csv"
+    FEATURES_FILE: Path = DATA_DIR / "model_table.csv"
 
 
-# Global Config Instance
 CONFIG = ProjectConfig()

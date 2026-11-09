@@ -1,0 +1,50 @@
+{
+  "source": "yfinance (auto_adjust=True)",
+  "duplicate_dates_removed": 0,
+  "missing_values_before": {
+    "SPY": 0,
+    "QQQ": 0,
+    "TLT": 0,
+    "GLD": 0,
+    "VIX": 0
+  },
+  "non_positive_prices": {
+    "SPY": 0,
+    "QQQ": 0,
+    "TLT": 0,
+    "GLD": 0,
+    "VIX": 0
+  },
+  "rows_after_alignment": 3229,
+  "date_range": [
+    "2012-01-03",
+    "2024-10-31"
+  ],
+  "daily_moves_over_10pct": {
+    "SPY": [
+      {
+        "date": "2020-03-12",
+        "log_return_pct": -10.06
+      },
+      {
+        "date": "2020-03-16",
+        "log_return_pct": -11.59
+      }
+    ],
+    "QQQ": [
+      {
+        "date": "2020-03-16",
+        "log_return_pct": -12.76
+      }
+    ],
+    "TLT": [],
+    "GLD": []
+  },
+  "calendar_gaps_over_4_days": 1,
+  "assets": [
+    "SPY",
+    "QQQ",
+    "TLT",
+    "GLD"
+  ]
+}

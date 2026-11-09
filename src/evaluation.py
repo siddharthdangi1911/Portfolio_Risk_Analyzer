@@ -1,151 +1,98 @@
 """
 src/evaluation.py
 =============================================================================
-Machine Learning Evaluation & Error Analysis Framework
-Course: ES 335 - Machine Learning
+Metrics and error analysis for volatility forecasts (all in vol % units).
+
+  RMSE  - primary metric (penalises large misses, e.g. missing a vol spike)
+  MAE   - typical miss in vol points, easy to explain
+  R2    - share of variance explained (relative to predicting the test mean)
+  QLIKE - standard loss for volatility forecasts; robust to noise in the
+          realised-vol proxy and penalises under-prediction of risk more
+          than over-prediction:  QLIKE = mean( s2/h2 - log(s2/h2) - 1 )
+  Bias  - mean(prediction - actual); negative = risk under-estimated
 =============================================================================
-Standardized evaluation metrics for 1-day risk prediction:
-  1. Regression Metrics: MSE, RMSE, MAE, R^2, Max Error, Residual Statistics
-  2. Classification Metrics: Accuracy, Precision, Recall, F1-Score, ROC-AUC
-  3. Diagnostic Error Analysis: Confusion Matrix, Residual Error Distribution, Regime Error Breakdown
 """
 
-import logging
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, List
+
 import numpy as np
-from sklearn.metrics import (
-    mean_squared_error,
-    mean_absolute_error,
-    r2_score,
-    max_error,
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_curve,
-    roc_auc_score,
-    confusion_matrix,
-)
+import pandas as pd
 
-logger = logging.getLogger(__name__)
+from src.config import CONFIG
 
 
-def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Any]:
-    """
-    Computes standard regression performance metrics and residual statistics.
-    All outputs in percentages (%).
-    """
-    y_true = np.asarray(y_true, dtype=np.float64)
-    y_pred = np.asarray(y_pred, dtype=np.float64)
-    
-    residuals = y_true - y_pred
-    mse = float(mean_squared_error(y_true, y_pred))
-    rmse = float(np.sqrt(mse))
-    mae = float(mean_absolute_error(y_true, y_pred))
-    r2 = float(r2_score(y_true, y_pred))
-    max_err = float(max_error(y_true, y_pred))
-    mean_res = float(np.mean(residuals))
-    std_res = float(np.std(residuals))
-
-    # Compute 15-bin residual histogram for web visualization
-    counts, bin_edges = np.histogram(residuals, bins=15)
-    hist_data = [
-        {"bin": round(float((bin_edges[i] + bin_edges[i + 1]) / 2), 2), "count": int(counts[i])}
-        for i in range(len(counts))
-    ]
-
+def regression_metrics(y: np.ndarray, p: np.ndarray) -> Dict[str, float]:
+    y = np.asarray(y, float)
+    p = np.clip(np.asarray(p, float), 1e-3, None)
+    e = p - y
+    ratio = (y ** 2) / (p ** 2)
     return {
-        "MSE": round(mse, 4),
-        "RMSE": round(rmse, 4),
-        "MAE": round(mae, 4),
-        "R2": round(r2, 4),
-        "Max_Error": round(max_err, 4),
-        "Mean_Residual": round(mean_res, 4),
-        "Std_Residual": round(std_res, 4),
-        "Residual_Histogram": hist_data,
+        "RMSE": float(np.sqrt(np.mean(e ** 2))),
+        "MAE": float(np.mean(np.abs(e))),
+        "R2": float(1 - np.sum(e ** 2) / np.sum((y - y.mean()) ** 2)),
+        "QLIKE": float(np.mean(ratio - np.log(ratio) - 1)),
+        "Bias": float(np.mean(e)),
+        "n": int(len(y)),
     }
 
 
-def compute_classification_metrics(y_true: np.ndarray, y_pred_cls: np.ndarray, y_pred_prob: np.ndarray) -> Dict[str, Any]:
-    """
-    Computes binary risk classification metrics and confusion matrix.
-    Positive Class (1) = High-Risk Tail Event (Next Day Drop <= -1.60%)
-    Negative Class (0) = Normal / Safe Trading Day
-    """
-    y_true = np.asarray(y_true, dtype=int)
-    y_pred_cls = np.asarray(y_pred_cls, dtype=int)
-    y_pred_prob = np.asarray(y_pred_prob, dtype=np.float64)
+def rmse(y, p) -> float:
+    return float(np.sqrt(np.mean((np.asarray(p, float) - np.asarray(y, float)) ** 2)))
 
-    acc = float(accuracy_score(y_true, y_pred_cls))
-    prec = float(precision_score(y_true, y_pred_cls, zero_division=0))
-    rec = float(recall_score(y_true, y_pred_cls, zero_division=0))
-    f1 = float(f1_score(y_true, y_pred_cls, zero_division=0))
 
-    try:
-        auc = float(roc_auc_score(y_true, y_pred_prob))
-    except Exception:
-        auc = 0.50
-
-    cm = confusion_matrix(y_true, y_pred_cls)
-    # Format: [[TN, FP], [FN, TP]]
-    tn, fp, fn, tp = (int(cm[0, 0]), int(cm[0, 1]), int(cm[1, 0]), int(cm[1, 1])) if cm.shape == (2, 2) else (len(y_true), 0, 0, 0)
-
-    # ROC curve points
-    try:
-        fpr, tpr, thresholds = roc_curve(y_true, y_pred_prob)
-        # Sample down to 20 points for smooth web rendering
-        step = max(1, len(fpr) // 20)
-        roc_pts = [{"x": round(float(fpr[i]), 4), "y": round(float(tpr[i]), 4)} for i in range(0, len(fpr), step)]
-        if roc_pts[-1]["x"] != 1.0:
-            roc_pts.append({"x": 1.0, "y": 1.0})
-    except Exception:
-        roc_pts = [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
-
+def block_bootstrap_compare(dates: pd.Index, y: np.ndarray, p_model: np.ndarray, p_base: np.ndarray,
+                            reps: int = CONFIG.BOOTSTRAP_REPS, block: int = CONFIG.BOOTSTRAP_BLOCK,
+                            seed: int = CONFIG.SEED) -> Dict[str, float]:
+    """Moving-block bootstrap over trading DATES (all assets of a date move
+    together). Blocks keep the autocorrelation created by overlapping
+    20-day targets, which an ordinary bootstrap would ignore."""
+    rng = np.random.default_rng(seed)
+    uniq = np.array(sorted(pd.unique(dates)))
+    pos = {d: i for i, d in enumerate(uniq)}
+    di = np.array([pos[d] for d in dates])
+    se_m = (p_model - y) ** 2
+    se_b = (p_base - y) ** 2
+    # per-date sums so resampling is cheap
+    n_d = len(uniq)
+    sum_m = np.bincount(di, se_m, n_d)
+    sum_b = np.bincount(di, se_b, n_d)
+    cnt = np.bincount(di, minlength=n_d)
+    n_blocks = int(np.ceil(n_d / block))
+    rm, rb, diff = [], [], []
+    for _ in range(reps):
+        starts = rng.integers(0, n_d - block + 1, n_blocks)
+        idx = (starts[:, None] + np.arange(block)).ravel()[:n_d]
+        c = cnt[idx].sum()
+        m = np.sqrt(sum_m[idx].sum() / c)
+        b = np.sqrt(sum_b[idx].sum() / c)
+        rm.append(m); rb.append(b); diff.append(m - b)
+    diff = np.array(diff)
     return {
-        "Accuracy": round(acc * 100.0, 2),
-        "Precision": round(prec * 100.0, 2),
-        "Recall": round(rec * 100.0, 2),
-        "F1_Score": round(f1, 4),
-        "ROC_AUC": round(auc, 4),
-        "Confusion_Matrix": {
-            "TN": tn,
-            "FP": fp,
-            "FN": fn,
-            "TP": tp,
-            "Total": len(y_true)
-        },
-        "ROC_Curve": roc_pts
+        "model_RMSE_CI95": [float(np.percentile(rm, 2.5)), float(np.percentile(rm, 97.5))],
+        "baseline_RMSE_CI95": [float(np.percentile(rb, 2.5)), float(np.percentile(rb, 97.5))],
+        "RMSE_diff_mean": float(diff.mean()),
+        "RMSE_diff_CI95": [float(np.percentile(diff, 2.5)), float(np.percentile(diff, 97.5))],
+        "share_of_resamples_model_better": float(np.mean(diff < 0)),
     }
 
 
-def compute_regime_error_breakdown(y_true: np.ndarray, y_pred: np.ndarray, vix_levels: np.ndarray) -> Dict[str, Any]:
-    """
-    Evaluates MAE and RMSE across market volatility regimes:
-      - Low Volatility (VIX < 16)
-      - Medium Volatility (16 <= VIX <= 22)
-      - High Volatility / Crisis (VIX > 22)
-    """
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
-    vix = np.asarray(vix_levels)
-
-    regimes = {
-        "Low_Vol_VIX_under_16": vix < 16.0,
-        "Med_Vol_VIX_16_to_22": (vix >= 16.0) & (vix <= 22.0),
-        "High_Vol_VIX_over_22": vix > 22.0,
+def regime_breakdown(df: pd.DataFrame, preds: Dict[str, np.ndarray], thresholds: List[float]) -> List[Dict]:
+    """Errors in calm / normal / stressed markets. Regimes are defined by the
+    VIX level on the forecast date, using tercile cut-offs from the TRAINING
+    data so the definition does not peek at the test set."""
+    lo, hi = thresholds
+    vix = df["vix_level"].to_numpy()
+    y = df["target_vol_20d"].to_numpy()
+    masks = {
+        f"Calm (VIX < {lo:.1f})": vix < lo,
+        f"Normal ({lo:.1f}-{hi:.1f})": (vix >= lo) & (vix <= hi),
+        f"Stressed (VIX > {hi:.1f})": vix > hi,
     }
-
-    breakdown = {}
-    for name, mask in regimes.items():
-        if np.sum(mask) > 0:
-            sub_true = y_true[mask]
-            sub_pred = y_pred[mask]
-            breakdown[name] = {
-                "count": int(np.sum(mask)),
-                "MAE": round(float(mean_absolute_error(sub_true, sub_pred)), 4),
-                "RMSE": round(float(np.sqrt(mean_squared_error(sub_true, sub_pred))), 4),
-            }
-        else:
-            breakdown[name] = {"count": 0, "MAE": 0.0, "RMSE": 0.0}
-
-    return breakdown
+    out = []
+    for name, m in masks.items():
+        row = {"regime": name, "n": int(m.sum())}
+        for k, p in preds.items():
+            row[k] = {"RMSE": rmse(y[m], p[m]) if m.any() else None,
+                      "MAE": float(np.mean(np.abs(p[m] - y[m]))) if m.any() else None}
+        out.append(row)
+    return out

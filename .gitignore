@@ -24,3 +24,4 @@ tmp/
 # User images (not tracked in repo)
 images/
 
+.claude/

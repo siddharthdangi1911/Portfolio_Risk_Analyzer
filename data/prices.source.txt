@@ -1,0 +1,1 @@
+yfinance (auto_adjust=True)

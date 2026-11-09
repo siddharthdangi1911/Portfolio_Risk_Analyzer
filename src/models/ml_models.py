@@ -1,193 +1,159 @@
 """
 src/models/ml_models.py
 =============================================================================
-Core Machine Learning Models: Linear Regression, Decision Tree, SVM, Logistic Regression, LightGBM
-Course: ES 335 - Machine Learning
+Baselines and candidate model families for 20-day volatility forecasting.
+
+Baselines (no learning, or a single mean):
+  * HistoricalAverage  - each asset's average realised vol in the training data
+                         (the "simple historical average" in our research question)
+  * RecentVol20        - today's trailing 20-day vol (vol persistence / random walk)
+  * EWMAVol            - RiskMetrics EWMA vol (classic industry benchmark)
+
+Candidate ML families (all wrapped in a scikit-learn Pipeline so that the
+StandardScaler is fitted only on whatever data the model is trained on -
+no leakage across CV folds, validation or test):
+  * Ridge regression            - linear, regularised; vol is highly persistent so
+                                   a linear combination of past vols is a strong model
+  * Decision tree               - simple non-linear rules (regimes)
+  * Random forest               - averaged trees, captures interactions, low variance
+  * Support vector regression   - RBF kernel, smooth non-linear fit
+  * Gradient boosting           - sequential trees (sklearn HistGradientBoosting)
+
+`log_target=True` trains on log(volatility): vol is right-skewed and its
+errors scale with its level, so the log scale is closer to the
+homoscedastic-error assumption of squared-error training. Predictions are
+always converted back to volatility % before scoring. Because exp(E[log y])
+under-estimates E[y] (Jensen's inequality), back-transformed predictions are
+multiplied by Duan's smearing factor mean(y / exp(fitted log y)), estimated
+on the training data only.
 =============================================================================
-Provides clean, scikit-learn standard implementations for 1-day risk forecasting:
-  1. Linear Regression (L2 Penalized Ridge)
-  2. Decision Tree (CART Regressor & Classifier)
-  3. Support Vector Machine (SVR & SVC with RBF kernel)
-  4. Logistic Regression (Probabilistic Tail Risk Classifier)
-  5. LightGBM (Gradient Boosted Trees Benchmark)
 """
 
-import logging
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Any, Dict, List
+
 import numpy as np
-from sklearn.linear_model import Ridge, LogisticRegression
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn.svm import SVR, SVC
-import lightgbm as lgb
+import pandas as pd
+from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
 
 from src.config import CONFIG
 
-logger = logging.getLogger(__name__)
+SEED = CONFIG.SEED
 
 
-class LinearRegressionRiskModel:
-    """
-    Model 1: Linear Regression (Ridge L2 Regularized)
-    
-    Objective:
-      min_w ||y - X w - b||_2^2 + alpha * ||w||_2^2
-      
-    Interpretable baseline providing linear feature weights (beta coefficients).
-    """
+# ----------------------------------------------------------------------------
+# Baselines
+# ----------------------------------------------------------------------------
+class HistoricalAverage:
+    name = "Historical average"
 
-    def __init__(self, alpha: float = 1.0):
-        self.alpha = alpha
-        self.regressor = Ridge(alpha=alpha, random_state=CONFIG.SEED)
+    def fit(self, df: pd.DataFrame, y: np.ndarray):
+        s = pd.Series(np.asarray(y), index=df.index)
+        self.means_ = s.groupby(df["asset"].values).mean().to_dict()
+        self.global_ = float(np.mean(y))
+        return self
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
-        self.regressor.fit(X_train, y_train)
-        logger.info(f"Fitted Linear Regression (Ridge alpha={self.alpha}). Intercept: {self.regressor.intercept_:.4f}")
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        return self.regressor.predict(X)
-
-    def get_coefficients(self, feature_names: List[str]) -> Dict[str, float]:
-        coefs = self.regressor.coef_
-        return {feat: float(round(c, 4)) for feat, c in zip(feature_names, coefs)}
+    def predict(self, df: pd.DataFrame) -> np.ndarray:
+        return df["asset"].map(self.means_).fillna(self.global_).to_numpy(dtype=float)
 
 
-class DecisionTreeRiskModel:
-    """
-    Model 2: Decision Tree (CART)
-    
-    Splitting Criterion:
-      Variance reduction (MSE) for regression; Gini impurity for classification.
-    Non-parametric step-function partitioning of feature space.
-    """
+class ColumnBaseline:
+    def __init__(self, name: str, column: str):
+        self.name, self.column = name, column
 
-    def __init__(self, max_depth: int = 4, min_samples_leaf: int = 20):
-        self.max_depth = max_depth
-        self.min_samples_leaf = min_samples_leaf
-        self.regressor = DecisionTreeRegressor(
-            max_depth=max_depth,
-            min_samples_leaf=min_samples_leaf,
-            random_state=CONFIG.SEED
+    def fit(self, df, y):
+        return self
+
+    def predict(self, df: pd.DataFrame) -> np.ndarray:
+        return df[self.column].to_numpy(dtype=float)
+
+
+def make_baselines() -> List[Any]:
+    return [
+        HistoricalAverage(),
+        ColumnBaseline("Recent 20-day vol", "vol_20d"),
+        ColumnBaseline("EWMA vol (RiskMetrics)", "ewma_vol"),
+    ]
+
+
+PRIMARY_BASELINE = "Recent 20-day vol"   # the baseline named in our proposal
+
+
+# ----------------------------------------------------------------------------
+# Candidate families
+# ----------------------------------------------------------------------------
+def _estimator(family: str, p: Dict[str, Any]):
+    if family == "Ridge":
+        return Ridge(alpha=p["alpha"])
+    if family == "Decision tree":
+        return DecisionTreeRegressor(max_depth=p["max_depth"], min_samples_leaf=p["min_samples_leaf"], random_state=SEED)
+    if family == "Random forest":
+        return RandomForestRegressor(
+            n_estimators=p.get("n_estimators", 300), max_depth=p["max_depth"],
+            min_samples_leaf=p["min_samples_leaf"], max_features=p["max_features"],
+            n_jobs=-1, random_state=SEED,
         )
-        self.classifier = DecisionTreeClassifier(
-            max_depth=max_depth,
-            min_samples_leaf=min_samples_leaf,
-            class_weight="balanced",
-            random_state=CONFIG.SEED
+    if family == "SVR (RBF)":
+        return SVR(kernel="rbf", C=p["C"], epsilon=p["epsilon"], gamma=p.get("gamma", "scale"))
+    if family == "Gradient boosting":
+        return HistGradientBoostingRegressor(
+            learning_rate=p["learning_rate"], max_iter=p["max_iter"], max_depth=p["max_depth"],
+            min_samples_leaf=p["min_samples_leaf"], l2_regularization=p.get("l2", 0.0),
+            early_stopping=False, random_state=SEED,
         )
-
-    def fit(self, X_train: np.ndarray, y_reg_train: np.ndarray, y_cls_train: np.ndarray):
-        self.regressor.fit(X_train, y_reg_train)
-        self.classifier.fit(X_train, y_cls_train)
-        logger.info(f"Fitted Decision Tree Regressor & Classifier (max_depth={self.max_depth}).")
-
-    def predict(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        pred_ret = self.regressor.predict(X)
-        pred_cls = self.classifier.predict(X)
-        pred_prob = self.classifier.predict_proba(X)[:, 1]
-        return pred_ret, pred_cls, pred_prob
-
-    def get_feature_importances(self, feature_names: List[str]) -> Dict[str, float]:
-        imp = self.regressor.feature_importances_
-        norm_imp = imp / np.maximum(1e-8, np.sum(imp))
-        return {feat: float(round(score, 4)) for feat, score in zip(feature_names, norm_imp)}
+    raise ValueError(family)
 
 
-class SVMRiskModel:
-    """
-    Model 3: Support Vector Machine (SVR & SVC with RBF Kernel)
-    
-    Maps inputs to infinite-dimensional Hilbert space via Gaussian RBF kernel:
-      K(x, x') = exp(-gamma * ||x - x'||^2)
-    Maximizes margin epsilon with L2 regularization parameter C.
-    """
+class LogTargetRegressor(RegressorMixin, BaseEstimator):
+    """Fit on log(y); predict exp(f(x)) * smearing factor."""
 
-    def __init__(self, C: float = 1.0, epsilon: float = 0.1, gamma: str = "scale"):
-        self.C = C
-        self.epsilon = epsilon
-        self.regressor = SVR(kernel="rbf", C=C, epsilon=epsilon, gamma=gamma)
-        self.classifier = SVC(kernel="rbf", C=C, class_weight="balanced", probability=True, gamma=gamma, random_state=CONFIG.SEED)
+    def __init__(self, regressor=None):
+        self.regressor = regressor
 
-    def fit(self, X_train: np.ndarray, y_reg_train: np.ndarray, y_cls_train: np.ndarray):
-        self.regressor.fit(X_train, y_reg_train)
-        self.classifier.fit(X_train, y_cls_train)
-        logger.info(f"Fitted Support Vector Machine (SVR/SVC RBF, C={self.C}, eps={self.epsilon}).")
+    def fit(self, X, y):
+        y = np.asarray(y, float)
+        self.regressor_ = clone(self.regressor).fit(X, np.log(y))
+        self.smearing_ = float(np.mean(y / np.exp(self.regressor_.predict(X))))
+        return self
 
-    def predict(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        pred_ret = self.regressor.predict(X)
-        pred_cls = self.classifier.predict(X)
-        pred_prob = self.classifier.predict_proba(X)[:, 1]
-        return pred_ret, pred_cls, pred_prob
+    def predict(self, X):
+        return np.exp(self.regressor_.predict(X)) * self.smearing_
 
 
-class LogisticRiskClassifier:
-    """
-    Model 4: Logistic Regression (Probabilistic Risk Classifier)
-    
-    Formulation:
-      P(High Risk = 1 | X) = 1 / (1 + exp(-(w^T x + b)))
-      
-    Outputs calibrated probabilities of downside crash days with balanced class weighting.
-    """
-
-    def __init__(self, C: float = 1.0):
-        self.C = C
-        self.classifier = LogisticRegression(
-            C=C,
-            class_weight="balanced",
-            max_iter=1000,
-            random_state=CONFIG.SEED
-        )
-
-    def fit(self, X_train: np.ndarray, y_cls_train: np.ndarray):
-        self.classifier.fit(X_train, y_cls_train)
-        logger.info(f"Fitted Logistic Regression Classifier. Intercept: {self.classifier.intercept_[0]:.4f}")
-
-    def predict(self, X: np.ndarray, threshold: float = 0.5) -> Tuple[np.ndarray, np.ndarray]:
-        probs = self.classifier.predict_proba(X)[:, 1]
-        preds = (probs >= threshold).astype(int)
-        return preds, probs
-
-    def get_coefficients(self, feature_names: List[str]) -> Dict[str, float]:
-        coefs = self.classifier.coef_[0]
-        return {feat: float(round(c, 4)) for feat, c in zip(feature_names, coefs)}
+def make_model(family: str, params: Dict[str, Any]):
+    pipe = Pipeline([("scale", StandardScaler()), ("model", _estimator(family, params))])
+    if params.get("log_target", True):
+        return LogTargetRegressor(pipe)
+    return pipe
 
 
-class LightGBMRiskModel:
-    """
-    Model 5: Gradient Boosted Trees (LightGBM)
-    
-    Non-linear tree ensemble optimizing gradient descent in function space.
-    """
+# Stage 1 (screening): a small, sensible grid per family, scored by
+# expanding-window cross-validation inside the training period.
+SCREEN_GRIDS: Dict[str, List[Dict[str, Any]]] = {
+    "Ridge": [{"alpha": a, "log_target": lt} for a in (1.0, 10.0) for lt in (True, False)],
+    "Decision tree": [{"max_depth": d, "min_samples_leaf": 50, "log_target": True} for d in (4, 6)],
+    "Random forest": [{"max_depth": d, "min_samples_leaf": 20, "max_features": 0.5, "n_estimators": 200, "log_target": True} for d in (6, None)],
+    "SVR (RBF)": [{"C": c, "epsilon": 0.05, "log_target": True} for c in (1.0, 10.0)],
+    "Gradient boosting": [{"learning_rate": 0.05, "max_iter": 200, "max_depth": d, "min_samples_leaf": 40, "log_target": True} for d in (3, None)],
+}
 
-    def __init__(self, n_estimators: int = 100, learning_rate: float = 0.03, max_depth: int = 4):
-        self.regressor = lgb.LGBMRegressor(
-            n_estimators=n_estimators,
-            learning_rate=learning_rate,
-            max_depth=max_depth,
-            random_state=CONFIG.SEED,
-            verbose=-1
-        )
-        self.classifier = lgb.LGBMClassifier(
-            n_estimators=n_estimators,
-            learning_rate=learning_rate,
-            max_depth=max_depth,
-            class_weight="balanced",
-            random_state=CONFIG.SEED,
-            verbose=-1
-        )
+# Stage 2 (tuning of the selected family only): finer grid, each config is
+# trained on the training split and scored on the validation split.
+TUNE_GRIDS: Dict[str, List[Dict[str, Any]]] = {
+    "Ridge": [{"alpha": a, "log_target": lt} for a in (0.001, 0.01, 0.1, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0) for lt in (True, False)],
+    "Decision tree": [{"max_depth": d, "min_samples_leaf": m, "log_target": lt}
+                      for d in (3, 4, 5, 6, 8, 10) for m in (20, 50, 100, 200) for lt in (True, False)],
+    "Random forest": [{"max_depth": d, "min_samples_leaf": m, "max_features": mf, "n_estimators": 300, "log_target": True}
+                      for d in (4, 6, 8, 12, None) for m in (5, 20, 50) for mf in (0.33, 0.5, 1.0)],
+    "SVR (RBF)": [{"C": c, "epsilon": e, "gamma": g, "log_target": True}
+                  for c in (0.3, 1.0, 3.0, 10.0, 30.0) for e in (0.02, 0.05, 0.1) for g in ("scale", 0.01, 0.05)],
+    "Gradient boosting": [{"learning_rate": lr, "max_iter": it, "max_depth": d, "min_samples_leaf": m, "l2": 1.0, "log_target": True}
+                          for lr in (0.02, 0.05, 0.1) for it in (100, 300) for d in (2, 3, 5) for m in (20, 80)],
+}
 
-    def fit(self, X_train: np.ndarray, y_reg_train: np.ndarray, y_cls_train: np.ndarray):
-        self.regressor.fit(X_train, y_reg_train)
-        self.classifier.fit(X_train, y_cls_train)
-        logger.info("Fitted LightGBM Gradient Boosted Ensembles.")
-
-    def predict(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        pred_ret = self.regressor.predict(X)
-        pred_cls = self.classifier.predict(X)
-        pred_prob = self.classifier.predict_proba(X)[:, 1]
-        return pred_ret, pred_cls, pred_prob
-
-    def get_feature_importances(self, feature_names: List[str]) -> Dict[str, float]:
-        imp = self.regressor.feature_importances_
-        norm_imp = imp / np.maximum(1e-8, np.sum(imp))
-        return {feat: float(round(score, 4)) for feat, score in zip(feature_names, norm_imp)}
+FAMILIES = list(SCREEN_GRIDS)
