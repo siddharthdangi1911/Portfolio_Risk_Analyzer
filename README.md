@@ -16,7 +16,7 @@
 | **Unit (row)** | One asset on one trading day |
 | **Prediction time** | After the close of day *t*. All features use prices up to and including day *t* |
 | **Baselines** | (1) the asset's historical average volatility in the training data, (2) recent 20-day volatility (the proposal's baseline), (3) RiskMetrics EWMA (λ = 0.94) |
-| **Candidates** | Ridge regression, decision tree, random forest, SVR (RBF), gradient boosting |
+| **Candidates** | Ridge regression, decision tree, random forest, SVR (RBF), gradient boosting (scikit-learn), LightGBM |
 | **Metrics** | RMSE (primary), MAE, R², QLIKE, bias |
 | **Not claimed** | Return or direction prediction, trading profits, or investment advice. Results hold only for the assets and period studied |
 
@@ -25,7 +25,7 @@
 Data: dividend-adjusted daily closes for **SPY, QQQ, TLT, GLD** plus **^VIX** (Yahoo Finance, 2012-01-03 to 2024-10-31), 12,436 asset-days.
 Splits (after a 20-day embargo): train 2012-06 to 2020-12 (8,500 rows), validation 2021-01 to 2022-12 (1,932 rows), test 2023-01 to 2024-10 (1,764 rows).
 
-**Stage 1, screening (5-fold expanding-window CV on train only, RMSE):** Ridge 6.66, random forest 7.22, gradient boosting 7.37, decision tree 7.65, SVR 8.11 (baselines: EWMA 7.23, recent vol 7.77, historical average 7.85). Ridge won every one of the 5 folds, so it is the only family carried forward.
+**Stage 1, screening (5-fold expanding-window CV on train only, RMSE):** Ridge 6.66, LightGBM 7.16, random forest 7.22, gradient boosting 7.37, decision tree 7.65, SVR 8.11 (baselines: EWMA 7.23, recent vol 7.77, historical average 7.85). Ridge won every one of the 5 folds (LightGBM, the best tree model, was second), so it is the only family carried forward.
 
 **Stage 2, tuning Ridge on validation (24 configs):** best `alpha = 30`, log target. On validation, EWMA (RMSE 5.08) still beat the tuned Ridge (5.46): 2022 was a persistent high-volatility year and the model pulled forecasts back toward normal too fast (bias −1.7 vol points).
 
@@ -54,7 +54,7 @@ data/prices.csv ──► quality checks ──► asset-day table (features at 
               chronological split + 20-day embargo
               train 2012–2020 │ validation 2021–2022 │ test 2023–2024
                                          │
- Stage 1  SCREEN  5 families, expanding-window CV on TRAIN only ──► pick best family
+ Stage 1  SCREEN  6 families, expanding-window CV on TRAIN only ──► pick best family
  Stage 2  TUNE    that family's hyperparameters: fit on train, score on VALIDATION
  Stage 3  TEST    refit on train+val, evaluate ONCE on TEST vs 3 baselines (+ bootstrap CIs)
                                          │
@@ -68,7 +68,7 @@ data/prices.csv ──► quality checks ──► asset-day table (features at 
 
 ### Is training really happening? Why is it so fast?
 Yes. Every run logs a `[proof]` line and saves a `training_proof` block in `evaluation_metrics.json`:
-* **86 model fits** in total: 60 CV fits to screen the 5 families, 24 validation fits to tune Ridge, the final refit, and a control fit.
+* **96 model fits** in total: 70 CV fits to screen the 6 families, 24 validation fits to tune Ridge, the final refit, and a control fit.
 * The final Ridge fit on 10,512 rows × 22 features takes about **6 ms** because Ridge is one closed-form linear solve. The slowest family (SVR) takes about 20 s for its 10 CV fits. A full run takes about 30 s. Speed reflects the data size and model class, not skipped training.
 * **Shuffled-label control:** the same model trained on randomly shuffled targets scores test RMSE 4.27, against 3.64 with the real targets, so the model learns real signal from the features.
 * The old pipeline's real problem was not speed: it fit all five models once with fixed settings, never used the validation set, and averaged all five at inference. Now one model is selected by CV, tuned on validation, tested once, and that same saved model (`artifacts/final_model.joblib`) is the only one used by `src/inference.py`.
@@ -79,7 +79,7 @@ Yes. Every run logs a `[proof]` line and saves a `training_proof` block in `eval
 src/config.py              assets, dates, splits, horizon, seed (single source of truth)
 src/data_loader.py         Yahoo Finance download + cache + data-quality report
 src/feature_engineering.py asset-day features and 20-day forward volatility target
-src/models/ml_models.py    baselines, 5 candidate families, screening & tuning grids
+src/models/ml_models.py    baselines, 6 candidate families, screening & tuning grids
 src/model_selection.py     embargoed splits, expanding-window CV, screening, validation tuning
 src/evaluation.py          RMSE/MAE/R²/QLIKE, block bootstrap, regime breakdown
 src/portfolio.py           portfolio metrics, trailing correlations, presets

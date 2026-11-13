@@ -18,6 +18,7 @@ no leakage across CV folds, validation or test):
   * Random forest               - averaged trees, captures interactions, low variance
   * Support vector regression   - RBF kernel, smooth non-linear fit
   * Gradient boosting           - sequential trees (sklearn HistGradientBoosting)
+  * LightGBM                    - leaf-wise gradient-boosted trees (lightgbm library)
 
 `log_target=True` trains on log(volatility): vol is right-skewed and its
 errors scale with its level, so the log scale is closer to the
@@ -106,6 +107,14 @@ def _estimator(family: str, p: Dict[str, Any]):
             min_samples_leaf=p["min_samples_leaf"], l2_regularization=p.get("l2", 0.0),
             early_stopping=False, random_state=SEED,
         )
+    if family == "LightGBM":
+        from lightgbm import LGBMRegressor
+        return LGBMRegressor(
+            n_estimators=p["n_estimators"], learning_rate=p["learning_rate"], num_leaves=p["num_leaves"],
+            min_child_samples=p["min_child_samples"], subsample=p.get("subsample", 0.8), subsample_freq=1,
+            colsample_bytree=p.get("colsample_bytree", 0.8), reg_lambda=p.get("reg_lambda", 1.0),
+            random_state=SEED, n_jobs=-1, verbose=-1,
+        )
     raise ValueError(family)
 
 
@@ -140,6 +149,7 @@ SCREEN_GRIDS: Dict[str, List[Dict[str, Any]]] = {
     "Random forest": [{"max_depth": d, "min_samples_leaf": 20, "max_features": 0.5, "n_estimators": 200, "log_target": True} for d in (6, None)],
     "SVR (RBF)": [{"C": c, "epsilon": 0.05, "log_target": True} for c in (1.0, 10.0)],
     "Gradient boosting": [{"learning_rate": 0.05, "max_iter": 200, "max_depth": d, "min_samples_leaf": 40, "log_target": True} for d in (3, None)],
+    "LightGBM": [{"n_estimators": 300, "learning_rate": 0.03, "num_leaves": nl, "min_child_samples": 50, "log_target": True} for nl in (7, 31)],
 }
 
 # Stage 2 (tuning of the selected family only): finer grid, each config is
@@ -154,6 +164,8 @@ TUNE_GRIDS: Dict[str, List[Dict[str, Any]]] = {
                   for c in (0.3, 1.0, 3.0, 10.0, 30.0) for e in (0.02, 0.05, 0.1) for g in ("scale", 0.01, 0.05)],
     "Gradient boosting": [{"learning_rate": lr, "max_iter": it, "max_depth": d, "min_samples_leaf": m, "l2": 1.0, "log_target": True}
                           for lr in (0.02, 0.05, 0.1) for it in (100, 300) for d in (2, 3, 5) for m in (20, 80)],
+    "LightGBM": [{"n_estimators": n, "learning_rate": lr, "num_leaves": nl, "min_child_samples": m, "reg_lambda": 1.0, "log_target": True}
+                 for n in (200, 500) for lr in (0.01, 0.03, 0.1) for nl in (7, 15, 31) for m in (20, 100)],
 }
 
 FAMILIES = list(SCREEN_GRIDS)
