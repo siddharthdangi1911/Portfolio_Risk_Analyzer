@@ -81,10 +81,16 @@ def run_full_pipeline(refresh_data: bool = False) -> Tuple[Dict[str, Any], pd.Da
 
     # Validation comparison (for the report): tuned model vs baselines, all fit on train
     val_model = make_model(family, best_params).fit(train[feats].to_numpy(), train["target_vol_20d"].to_numpy())
-    val_table = {f"{family} (tuned)": regression_metrics(val["target_vol_20d"], val_model.predict(val[feats].to_numpy()))}
+    p_val = val_model.predict(val[feats].to_numpy())
+    val_table = {f"{family} (tuned)": regression_metrics(val["target_vol_20d"], p_val)}
+    val_out = val[["asset", "vix_level", "target_vol_20d"]].copy()
+    val_out[f"pred::{family} (tuned)"] = p_val
     for b in make_baselines():
         b.fit(train, train["target_vol_20d"].to_numpy())
-        val_table[b.name] = regression_metrics(val["target_vol_20d"], b.predict(val))
+        pb = b.predict(val)
+        val_table[b.name] = regression_metrics(val["target_vol_20d"], pb)
+        val_out[f"pred::{b.name}"] = pb
+    val_out.to_csv(ARTIFACTS_DIR / "val_predictions.csv", index_label="Date")
 
     # 5. Stage 3: refit on train+val, single evaluation on test
     logger.info("Stage 3 - refitting on train+validation and evaluating once on the test split")
@@ -182,7 +188,7 @@ def run_full_pipeline(refresh_data: bool = False) -> Tuple[Dict[str, Any], pd.Da
                  "quality": quality, "n_rows_model_table": int(len(table)), "features": feats},
         "splits": sizes,
         "stage1_screening": screening,
-        "stage2_tuning": {k: v for k, v in tuning.items() if k != "trials"} | {"top_trials": tuning["trials"][:15]},
+        "stage2_tuning": {k: v for k, v in tuning.items() if k != "trials"} | {"top_trials": tuning["trials"][:15], "all_trials": tuning["trials"]},
         "validation_comparison": val_table,
         "final_model": {"family": family, "params": best_params, "trained_on": "train + validation",
                         "trained_through": bundle["trained_through"], "fit_seconds": round(fit_secs, 2)},

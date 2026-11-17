@@ -3,248 +3,360 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Can ML forecast market volatility better than history? | ES 335 Portfolio Risk Analyzer</title>
-  <meta name="description" content="ES 335 project: forecasting 20-day realised volatility of ETFs with machine learning, compared against simple historical baselines, and using the forecasts to compare portfolio risk.">
+  <title>Volatility Forecast Dashboard | ES 335 Portfolio Risk Analyzer</title>
+  <meta name="description" content="ES 335 project dashboard: can machine learning forecast 20-day realised volatility of SPY, QQQ, TLT and GLD better than simple historical baselines, and what does it mean for portfolio risk?">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <script src="data/site_data.js"></script>
 </head>
 <body>
-<nav class="topnav" aria-label="Sections">
-  <div class="inner">
-    <span class="brand">Portfolio Risk Analyzer</span>
-    <a href="#question">Question</a>
-    <a href="#data">Data</a>
-    <a href="#method">Method</a>
-    <a href="#selection">Model selection</a>
-    <a href="#results">Test results</a>
-    <a href="#explorer">Forecast explorer</a>
-    <a href="#portfolio">Portfolio lab</a>
-    <a href="#limits">Errors &amp; limits</a>
-    <a href="#reproduce">Reproduce</a>
+<div class="app">
+  <aside class="side" aria-label="Dashboard sections">
+    <div class="brand">
+      <h1>Portfolio Risk Analyzer</h1>
+      <div class="sub">ES 335 &middot; Volatility forecasting</div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="foot">
+      <div id="gen-date"></div>
+      <button class="btn theme-btn" id="theme-btn" type="button">Toggle dark mode</button>
+      <div style="margin-top:8px"><a href="https://github.com/siddharthdangi1911/Portfolio_Risk_Analyzer">Source code on GitHub</a></div>
+    </div>
+  </aside>
+
+  <div>
+    <nav class="mobile-nav" id="mnav" aria-label="Dashboard sections"></nav>
+    <main class="main">
+
+    <!-- ================= OVERVIEW ================= -->
+    <section class="panel" id="overview" data-title="Overview">
+      <div class="topbar">
+        <div>
+          <div class="kicker">ES 335 Machine Learning &middot; IIT Gandhinagar</div>
+          <h2>Can ML forecast next-month volatility better than simple history?</h2>
+          <p class="muted">Each row is one ETF on one trading day. At the close of day <i>t</i> we forecast the annualised volatility of the next 20 trading days, and check the forecast on years the model never saw.</p>
+        </div>
+      </div>
+      <div class="answer" id="headline">Loading results&hellip;</div>
+      <div class="kpis" id="ov-kpis"></div>
+      <div class="grid g-2-1">
+        <div class="card">
+          <div class="card-head"><div><h3>Test-set error of every forecast</h3><div class="desc">RMSE in volatility points on 2023&ndash;2024, lower is better. Evaluated once.</div></div></div>
+          <div class="chart md"><canvas id="ov-bar" aria-label="Test RMSE by forecast"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Key findings</h3>
+          <ul class="tight" id="ov-findings"></ul>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div><h3>Forecast vs what actually happened</h3><div class="desc">Test period. Pick an asset; open the Forecast explorer tab for more control.</div></div>
+          <div class="seg" id="ov-asset"></div>
+        </div>
+        <div class="chart"><canvas id="ov-line" aria-label="Forecast versus realised volatility"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h3>How the model was chosen (click a stage)</h3>
+        <div class="flow" id="ov-flow"></div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Problem and scope</h3>
+          <table>
+            <tr><th>Target</th><td>Annualised realised volatility (%) of daily log returns over the <b>next 20 trading days</b> (t+1 &hellip; t+20)</td></tr>
+            <tr><th>Unit (one row)</th><td>One asset on one trading day</td></tr>
+            <tr><th>Prediction time</th><td>After the close of day t. Every feature uses prices up to and including day t.</td></tr>
+            <tr><th>Primary metric</th><td>RMSE in volatility points (also MAE, R&sup2;, QLIKE, bias)</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>What we claim, and what we don't</h3>
+          <p class="muted">We test whether a model trained on 2012&ndash;2022 forecasts 20-day volatility on 2023&ndash;2024 more accurately than (a) each asset's historical average volatility, (b) the most recent 20-day volatility, and (c) the RiskMetrics EWMA estimate.</p>
+          <p class="muted">We do <b>not</b> predict returns or price direction, and nothing here is investment advice. Results apply only to these four ETFs and this period.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= DATA ================= -->
+    <section class="panel" id="data" data-title="Data">
+      <div class="topbar"><div><div class="kicker">Data understanding</div><h2>Data</h2><p class="muted" id="data-intro"></p></div></div>
+      <div class="kpis" id="data-kpis"></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div><h3>Price history</h3><div class="desc">Dividend-adjusted closes, rebased to 100 at the first date. Drag on the chart to zoom, double-click to reset.</div></div>
+          <div class="controls" style="margin:0">
+            <span id="px-assets" class="chips"></span>
+            <label><input type="checkbox" id="px-log"> Log scale</label>
+            <button class="btn" id="px-reset" type="button">Reset zoom</button>
+          </div>
+        </div>
+        <div class="chart lg"><canvas id="px-chart" aria-label="Price history"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div><h3>Trailing 20-day volatility, with the train / validation / test split</h3><div class="desc">Shaded bands show the chronological split. Volatility clusters: calm years, then sudden spikes (2015, 2018, 2020, 2022).</div></div>
+          <div class="controls" style="margin:0"><span id="hv-assets" class="chips"></span><button class="btn" id="hv-reset" type="button">Reset zoom</button></div>
+        </div>
+        <div class="chart lg"><canvas id="hv-chart" aria-label="Historical volatility"></canvas></div>
+        <div class="splitbar" id="split-bar" role="img" aria-label="Train, validation and test periods" style="margin-top:12px"></div>
+        <p class="small muted" id="split-text"></p>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>Distribution of daily returns</h3><div class="desc">Fat tails: far more extreme days than a normal curve predicts.</div></div><select id="rd-asset" aria-label="Asset"></select></div>
+          <div class="chart md"><canvas id="rd-chart" aria-label="Return distribution"></canvas></div>
+          <div class="table-wrap"><table id="rd-stats"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Daily return correlation</h3><div class="desc">Low or negative correlation means diversification.</div></div>
+            <div class="seg" id="dcorr-seg"><button data-k="corr_train" class="on" type="button">Train years</button><button data-k="corr_test" type="button">Test years</button></div></div>
+          <div class="heat" id="dheat"></div>
+          <h3 style="margin-top:16px">Assets</h3>
+          <table id="asset-table"></table>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Quality checks</h3>
+          <table id="quality-table"></table>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Feature catalogue</h3><div class="desc">Every feature uses information available at the close of day t.</div></div>
+            <input type="search" id="feat-q" placeholder="Filter features" aria-label="Filter features"></div>
+          <div class="table-wrap" style="max-height:340px;overflow-y:auto"><table id="feature-table"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SELECTION ================= -->
+    <section class="panel" id="selection" data-title="Model selection">
+      <div class="topbar"><div><div class="kicker">Baselines, methods and evaluation design</div><h2>Model selection: screen, choose, tune</h2><p class="muted" id="sel-intro"></p></div></div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>Stage 1: cross-validation RMSE on training years only</h3><div class="desc">Mean over 5 expanding-window folds. Whiskers show &plusmn;1 standard deviation across folds.</div></div></div>
+          <div class="chart"><canvas id="cv-bar" aria-label="Cross-validation RMSE by model"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>All models compared</h3>
+          <div class="table-wrap"><table id="cv-table"></table></div>
+          <p class="note" id="cv-note"></p>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div><h3>RMSE in each CV fold</h3><div class="desc">Click legend items to hide or show models. Fold 5 contains the 2020 COVID shock, which dominates the mean.</div></div>
+        </div>
+        <div class="chart"><canvas id="fold-chart" aria-label="RMSE per fold"></canvas></div>
+        <div class="table-wrap"><table id="fold-info"></table></div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3 id="tune-title">Stage 2: tuning on validation</h3><div class="desc" id="tune-desc"></div></div></div>
+          <div class="chart md"><canvas id="tune-chart" aria-label="Validation tuning curve"></canvas></div>
+          <div class="table-wrap"><table id="tune-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Validation 2021&ndash;2022: tuned model vs baselines</h3><div class="desc">All fit on training years only.</div></div></div>
+          <div class="chart md"><canvas id="val-bar" aria-label="Validation RMSE"></canvas></div>
+          <p class="note" id="val-note"></p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Candidate models and baselines</h3>
+        <div class="grid g2" style="margin:0">
+          <ul class="tight" id="model-list"></ul>
+          <ul class="tight">
+            <li><b>Historical average</b>: each asset's mean volatility in the training data (the "simple historical average" in our question).</li>
+            <li><b>Recent 20-day vol</b>: the next 20 days look like the last 20 (the baseline named in our proposal).</li>
+            <li><b>EWMA (RiskMetrics, &lambda; = 0.94)</b>: the standard industry estimate, a tougher benchmark.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TEST RESULTS ================= -->
+    <section class="panel" id="results" data-title="Test results">
+      <div class="topbar"><div><div class="kicker">Results on the untouched test set</div><h2>Test results (2023&ndash;2024)</h2><p class="muted">The selected model was refit on train + validation and scored exactly once on these dates.</p></div></div>
+      <div class="kpis" id="res-kpis"></div>
+      <div class="grid g-2-1">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Compare forecasts by metric</h3><div class="desc" id="met-desc"></div></div>
+            <div class="seg" id="met-seg"></div>
+          </div>
+          <div class="chart md"><canvas id="met-chart" aria-label="Metric by forecast"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Is the improvement real?</h3>
+          <p class="small muted">Moving-block bootstrap (20-day blocks, 2000 resamples) of RMSE<sub>model</sub> &minus; RMSE<sub>baseline</sub>. Bars left of zero mean the model is better; a bar that crosses zero is not conclusive.</p>
+          <div class="chart sm"><canvas id="boot-chart" aria-label="Bootstrap confidence intervals"></canvas></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="table-wrap"><table id="test-table"></table></div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>Predicted vs actual</h3><div class="desc">Each dot is one asset-day. Points on the diagonal are perfect forecasts.</div></div>
+            <div class="seg" id="sc-asset"></div></div>
+          <div class="chart"><canvas id="sc-chart" aria-label="Predicted versus actual"></canvas></div>
+          <div class="controls" style="margin:8px 0 0"><label><input type="checkbox" id="sc-base"> Also show recent 20-day vol</label></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Distribution of errors</h3><div class="desc">Forecast &minus; actual. Left of zero = risk under-estimated.</div></div>
+            <select id="res-cmp" aria-label="Compare with"></select></div>
+          <div class="chart"><canvas id="res-hist" aria-label="Error histogram"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h3>Per-asset results</h3><div class="desc">Same metric as the selector above.</div></div></div>
+        <div class="chart md"><canvas id="pa-chart" aria-label="Per-asset error"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= EXPLORER ================= -->
+    <section class="panel" id="explorer" data-title="Forecast explorer">
+      <div class="topbar"><div><div class="kicker">Interactive</div><h2>Forecast explorer</h2><p class="muted">Pick a period, an asset and a date window. The error table recalculates for exactly the window you choose, so you can see where the model helps and where it fails.</p></div></div>
+      <div class="card">
+        <div class="controls">
+          <div class="seg" id="ex-period"><button data-p="test" class="on" type="button">Test 2023&ndash;24</button><button data-p="val" type="button">Validation 2021&ndash;22</button></div>
+          <div class="seg" id="ex-asset"></div>
+          <label><input type="checkbox" id="ex-model" checked> <span class="swatch" style="background:var(--s-model)"></span> ML model</label>
+          <label><input type="checkbox" id="ex-recent" checked> <span class="swatch" style="background:var(--s-base)"></span> Recent 20-day vol</label>
+          <label><input type="checkbox" id="ex-hist"> <span class="swatch dash" style="color:var(--s-hist)"></span> Historical avg</label>
+          <label><input type="checkbox" id="ex-ewma"> <span class="swatch" style="background:var(--s-ewma)"></span> EWMA</label>
+          <label><input type="checkbox" id="ex-vix"> VIX (own chart)</label>
+        </div>
+        <div class="controls"><span class="small muted">Jump to:</span><span class="chips" id="ex-jumps"></span></div>
+        <div class="range2">
+          <span id="ex-from-lbl"></span>
+          <div><input type="range" id="ex-from" min="0" value="0" aria-label="Window start"><input type="range" id="ex-to" min="0" aria-label="Window end"></div>
+          <span id="ex-to-lbl"></span>
+        </div>
+        <div class="chart lg"><canvas id="ex-chart" aria-label="Forecast versus realised volatility"></canvas></div>
+        <div class="chart sm" id="ex-vix-box" style="display:none"><canvas id="ex-vix-chart" aria-label="VIX level"></canvas></div>
+        <p class="hint">The solid dark line is the volatility that actually happened over the 20 days after each date, so it is only known 20 days later. Hover for values; drag the sliders to change the window.</p>
+        <div class="table-wrap"><table id="ex-table"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= ERRORS & REGIMES ================= -->
+    <section class="panel" id="errors" data-title="Errors &amp; regimes">
+      <div class="topbar"><div><div class="kicker">Results, errors and limitations</div><h2>Where the model goes wrong</h2><p class="muted">Errors in calm, normal and stressed markets, the largest misses, and what limits the claim.</p></div></div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>RMSE by market regime</h3><div class="desc" id="reg-desc"></div></div>
+            <div class="seg" id="reg-met"><button data-m="RMSE" class="on" type="button">RMSE</button><button data-m="MAE" type="button">MAE</button></div></div>
+          <div class="chart md"><canvas id="reg-chart" aria-label="Error by regime"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Forecast error vs VIX on the forecast date</h3><div class="desc">Large over-predictions cluster at VIX spikes that faded quickly.</div></div>
+            <div class="seg" id="ev-asset"></div></div>
+          <div class="chart md"><canvas id="ev-chart" aria-label="Error versus VIX"></canvas></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><div><h3>Largest test-set errors</h3><div class="desc">Click a row to open that date in the Forecast explorer.</div></div></div>
+        <div class="table-wrap"><table id="err-table"></table></div>
+      </div>
+      <div class="card">
+        <h3>Limitations</h3>
+        <ul class="tight" id="limits-list">
+          <li><b>Regime dependence.</b> The model learned that volatility tends to fall back to normal. That helped in the calm 2023&ndash;2024 test period but hurt in 2022, when volatility stayed high for months; EWMA beat it on validation. One test period of about 22 months cannot show that the advantage lasts.</li>
+          <li><b>One-day shocks.</b> A VIX spike that fades within days (for example 5 August 2024) leads to large over-predictions, because the model reads it like the start of a crisis.</li>
+          <li><b>Sudden stress without warning.</b> When volatility jumps with no prior signal (the July 2024 tech rotation), every forecast under-predicts.</li>
+          <li><b>Overlapping targets.</b> Consecutive days share 19 of their 20 target days, so there are far fewer independent observations than rows. That is why confidence intervals use a moving-block bootstrap.</li>
+          <li><b>Noisy target.</b> Realised volatility from 20 daily returns is itself a noisy estimate of true volatility, so even a perfect model would show error.</li>
+          <li><b>Small, liquid universe.</b> Four US-listed ETFs and one horizon only. Results may not carry over to single stocks, other markets or other horizons.</li>
+          <li><b>Single data vendor.</b> Prices come from Yahoo Finance and were not cross-checked against another source.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= PORTFOLIO ================= -->
+    <section class="panel" id="portfolio" data-title="Portfolio lab">
+      <div class="topbar"><div><div class="kicker">Interactive</div><h2>Portfolio lab</h2><p class="muted">Set weights to see the realised risk over the test period, and how per-asset forecasts become a portfolio risk forecast: &sigma;<sub>p</sub> = &radic;(w&#8890; D C D w), with D the forecast volatilities and C the trailing 60-day correlation known on each date.</p></div></div>
+      <div class="grid g-1-2">
+        <div class="card">
+          <h3>Weights</h3>
+          <div id="weights"></div>
+          <div class="chips" id="presets" style="margin:10px 0"></div>
+          <div class="kpis" id="pf-kpis" style="grid-template-columns:repeat(2,1fr);margin:0"></div>
+          <p class="small muted">Realised over the test period with daily rebalancing. Sharpe assumes a risk-free rate of 0 (a simplification).</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Growth of 100 invested</h3><div class="desc">Your portfolio vs each asset on its own, test period.</div></div></div>
+          <div class="chart"><canvas id="pf-growth" aria-label="Portfolio growth"></canvas></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><div><h3>Forecast vs realised portfolio volatility (next 20 days)</h3><div class="desc">Recomputed live for your weights.</div></div></div>
+        <div class="chart"><canvas id="pf-chart" aria-label="Portfolio volatility forecast"></canvas></div>
+        <div class="table-wrap"><table id="pf-err"></table></div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>Risk vs return of the presets</h3><div class="desc">Test period. Your current weights are the hollow dot.</div></div></div>
+          <div class="chart md"><canvas id="pf-rr" aria-label="Risk versus return"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Daily return correlation</h3></div>
+            <div class="seg" id="corr-seg"><button data-k="corr_train" class="on" type="button">Train years</button><button data-k="corr_test" type="button">Test years</button></div></div>
+          <div class="heat" id="heat"></div>
+          <p class="small muted">Stocks and bonds had low or negative correlation in the training years, but moved together more in 2023&ndash;2024, which weakens the 60/40 hedge.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= METHOD ================= -->
+    <section class="panel" id="method" data-title="Method &amp; reproduce">
+      <div class="topbar"><div><div class="kicker">Preprocessing, integrity and reproducibility</div><h2>Method, training proof and reproducibility</h2></div></div>
+      <div class="kpis" id="proof-kpis"></div>
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-head"><div><h3>What the final model relies on</h3><div class="desc">Permutation importance on the test set: how much RMSE rises when a feature is shuffled.</div></div></div>
+          <div class="chart"><canvas id="imp-chart" aria-label="Permutation importance"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3 id="coef-title">Learned coefficients</h3><div class="desc">Standardised features, log-volatility target. Positive raises the forecast.</div></div></div>
+          <div class="chart"><canvas id="coef-chart" aria-label="Model coefficients"></canvas></div>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Preprocessing choices and why</h3>
+          <ul class="tight">
+            <li><b>Log returns</b>: they add up over time; volatility is the standard deviation of daily returns &times; &radic;252.</li>
+            <li><b>Log of the target and of volatility features</b>: volatility is positive and right-skewed and errors grow with its level. In logs the relation is close to linear (HAR-style). The back-transform uses Duan's smearing factor, estimated on training data.</li>
+            <li><b>Standardisation inside a Pipeline</b>: the scaler is refit on each fold's training rows only, so validation and test statistics never leak into training.</li>
+            <li><b>20-day embargo</b>: a row dated t uses returns up to t+20. Rows whose target crosses a split boundary are dropped and each CV fold leaves a 20-day gap.</li>
+            <li><b>Date-based folds</b>: all assets of one day stay on the same side of a split.</li>
+            <li><b>Regimes from training data</b>: calm / normal / stressed cut-offs are VIX terciles of the training years, so the test set does not define them.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Is training really happening?</h3>
+          <div id="proof-text"></div>
+          <h3 style="margin-top:14px">Reproduce</h3>
+<pre>python -m venv .venv &amp;&amp; .venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/run_all.py --refresh-data   # download, train, select, test, export
+python -m src.inference --weights SPY=0.6,TLT=0.4</pre>
+          <p class="small muted">Data comes from Yahoo Finance's public endpoint through <code>yfinance</code>, with no credentials. Every number on this page is read from <code>docs/data/site_data.js</code>, written by <code>scripts/export_web_data.py</code> from the pipeline outputs.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Run details</h3>
+        <div class="table-wrap"><table id="repro-table"></table></div>
+      </div>
+    </section>
+
+    </main>
   </div>
-</nav>
-
-<main>
-  <!-- ============ HERO / QUESTION ============ -->
-  <section class="hero" id="question">
-    <div class="kicker">ES 335 Machine Learning &middot; IIT Gandhinagar</div>
-    <h1>Can machine learning forecast next-month market volatility better than simple history?</h1>
-    <p class="lede">We forecast how much an ETF's price will fluctuate over the next 20 trading days, compare machine-learning models with simple baselines on data they never saw, and use the forecasts to compare the risk of different portfolios.</p>
-    <div class="answer" id="headline-answer">Loading results&hellip;</div>
-    <div class="tiles" id="headline-tiles"></div>
-
-    <h3>Problem and scope</h3>
-    <div class="grid-2">
-      <div>
-        <table>
-          <tr><th>Target</th><td>Annualised realised volatility (%) of daily log returns over the <b>next 20 trading days</b> (t+1 &hellip; t+20)</td></tr>
-          <tr><th>Unit (one row)</th><td>One asset on one trading day</td></tr>
-          <tr><th>Prediction time</th><td>After the close of day t. Every feature uses prices up to and including day t.</td></tr>
-          <tr><th>Primary metric</th><td>RMSE in volatility points (also MAE, R&sup2;, QLIKE)</td></tr>
-        </table>
-      </div>
-      <div class="note" style="margin-top:0">
-        <b>What we claim, and what we don't.</b> We test whether a model trained on 2012&ndash;2022 data forecasts 20-day volatility on 2023&ndash;2024 more accurately than (a) each asset's historical average volatility, (b) the most recent 20-day volatility, and (c) the RiskMetrics EWMA estimate. We do <b>not</b> predict returns or price direction, and nothing here is investment advice. Results apply to the assets and period studied.
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ DATA ============ -->
-  <section id="data">
-    <div class="kicker">Data understanding</div>
-    <h2>Data</h2>
-    <p id="data-intro" class="muted"></p>
-    <div class="grid-2">
-      <div class="card">
-        <h3 style="margin-top:0">Assets</h3>
-        <table id="asset-table"></table>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0">Quality checks</h3>
-        <table id="quality-table"></table>
-      </div>
-    </div>
-    <h3>Chronological split (no shuffling)</h3>
-    <div class="timeline-bar" id="split-bar" role="img" aria-label="Train, validation and test periods"></div>
-    <p class="small muted" id="split-text"></p>
-    <details>
-      <summary>Feature catalogue (all computed from information available at the close of day t)</summary>
-      <div class="table-wrap"><table id="feature-table"></table></div>
-    </details>
-  </section>
-
-  <!-- ============ METHOD ============ -->
-  <section id="method">
-    <div class="kicker">Preprocessing, baselines and methods</div>
-    <h2>Method</h2>
-    <div class="flow">
-      <div class="step"><span class="n">STAGE 1</span><b>Screen every family</b><span>5 model families, expanding-window cross-validation on the training years only.</span></div>
-      <div class="step"><span class="n">PICK</span><b>Choose one family</b><span>Lowest mean CV RMSE wins. Only this family continues.</span></div>
-      <div class="step"><span class="n">STAGE 2</span><b>Tune on validation</b><span>Every setting is fit on train and scored on 2021&ndash;2022.</span></div>
-      <div class="step"><span class="n">STAGE 3</span><b>Test once</b><span>Refit on train + validation, evaluate a single time on 2023&ndash;2024.</span></div>
-    </div>
-    <div class="grid-2">
-      <div>
-        <h3>Baselines</h3>
-        <ul class="tight">
-          <li><b>Historical average</b>: each asset's mean volatility in the training data (this is the "simple historical average" in our question).</li>
-          <li><b>Recent 20-day vol</b>: tomorrow's 20 days will look like the last 20 days (the baseline in our proposal).</li>
-          <li><b>EWMA (RiskMetrics, &lambda; = 0.94)</b>: the standard industry estimate, a tougher benchmark.</li>
-        </ul>
-        <h3>Candidate models</h3>
-        <ul class="tight">
-          <li><b>Ridge regression</b>: linear and regularised. Volatility is persistent, so a weighted mix of past volatilities is a strong model.</li>
-          <li><b>Decision tree</b>, <b>random forest</b>, <b>gradient boosting</b>: non-linear rules and interactions, for example "high VIX <i>and</i> a falling market".</li>
-          <li><b>SVR (RBF kernel)</b>: a smooth non-linear fit.</li>
-        </ul>
-      </div>
-      <div>
-        <h3>Preprocessing choices and why</h3>
-        <ul class="tight">
-          <li><b>Log returns</b>: they add up over time, and volatility is the standard deviation of daily returns &times; &radic;252.</li>
-          <li><b>Log of the target and of the volatility features</b>: volatility is positive and right-skewed, and errors grow with its level. In logs the relation is close to linear (HAR-style). We correct the back-transform with Duan's smearing factor, because exp(mean of log) underestimates the mean.</li>
-          <li><b>Standardisation inside a Pipeline</b>: the scaler is refit on each fold's training rows only, so validation and test statistics never leak into training.</li>
-          <li><b>20-day embargo</b>: a row dated t uses returns up to t+20. Rows whose target window crosses a split boundary are dropped, and each CV fold leaves a 20-day gap.</li>
-          <li><b>Date-based folds</b>: all assets of one day stay on the same side of a split.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SELECTION ============ -->
-  <section id="selection">
-    <div class="kicker">Evaluation design</div>
-    <h2>Model selection: screen, choose, tune</h2>
-    <p class="muted" id="selection-intro"></p>
-    <div class="card">
-      <h3 style="margin-top:0">Stage 1: cross-validation on training years</h3>
-      <div class="chart-box" style="height:320px"><canvas id="cvChart" aria-label="Cross-validation RMSE by model"></canvas></div>
-      <details><summary>Per-fold RMSE table</summary><div class="table-wrap"><table id="fold-table"></table></div></details>
-      <p class="note" id="cv-note"></p>
-    </div>
-    <div class="grid-2">
-      <div class="card">
-        <h3 style="margin-top:0">Stage 2: tuning the selected family on validation</h3>
-        <div class="table-wrap"><table id="tune-table"></table></div>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0">Validation (2021&ndash;2022): tuned model vs baselines</h3>
-        <div class="table-wrap"><table id="val-table"></table></div>
-        <p class="note" id="val-note"></p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ RESULTS ============ -->
-  <section id="results">
-    <div class="kicker">Results on the untouched test set</div>
-    <h2>Test results (2023 &ndash; 2024)</h2>
-    <div class="card">
-      <div class="table-wrap"><table id="test-table"></table></div>
-      <p class="note" id="boot-note"></p>
-    </div>
-    <div class="grid-2">
-      <div class="card">
-        <h3 style="margin-top:0">Errors by market regime</h3>
-        <div class="chart-box short"><canvas id="regimeChart"></canvas></div>
-        <p class="small muted" id="regime-note"></p>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0">Per-asset RMSE</h3>
-        <div class="table-wrap"><table id="asset-metrics"></table></div>
-        <h3>What the model relies on</h3>
-        <div class="chart-box short" style="height:220px"><canvas id="impChart"></canvas></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ EXPLORER (interaction 1) ============ -->
-  <section id="explorer">
-    <div class="kicker">Interactive</div>
-    <h2>Forecast explorer</h2>
-    <p class="muted">Choose an asset and a window, then compare each forecast with what actually happened. The error table recalculates for the window you select, so you can check where the model helps and where it fails (for example around the August 2024 VIX spike).</p>
-    <div class="card">
-      <div class="controls">
-        <label>Asset <select id="ex-asset"></select></label>
-        <label>Window
-          <select id="ex-window">
-            <option value="all">Whole test period</option>
-          </select>
-        </label>
-        <label><input type="checkbox" id="ex-model" checked> <span class="swatch" style="background:var(--s-model)"></span> ML model</label>
-        <label><input type="checkbox" id="ex-recent" checked> <span class="swatch" style="background:var(--s-base)"></span> Recent 20-day vol</label>
-        <label><input type="checkbox" id="ex-hist"> <span class="swatch dash" style="color:var(--s-hist)"></span> Historical avg</label>
-        <label><input type="checkbox" id="ex-ewma"> <span class="swatch" style="background:var(--s-ewma)"></span> EWMA</label>
-      </div>
-      <div class="chart-box"><canvas id="exChart" aria-label="Forecast versus realised volatility"></canvas></div>
-      <p class="small muted">The black line is the volatility that actually happened over the 20 days after each date, so it is only known 20 days later. Hover over the chart to see the values for any date.</p>
-      <div class="table-wrap"><table id="ex-table"></table></div>
-    </div>
-  </section>
-
-  <!-- ============ PORTFOLIO (interaction 2) ============ -->
-  <section id="portfolio">
-    <div class="kicker">Interactive</div>
-    <h2>Portfolio lab</h2>
-    <p class="muted">Set portfolio weights to see the realised risk over the test period and how well per-asset forecasts translate into a portfolio risk forecast. Portfolio volatility is &sigma;<sub>p</sub> = &radic;(w&#8890; D C D w), where D holds the forecast volatilities and C is the trailing 60-day correlation known on each date.</p>
-    <p class="note" id="universe-note"></p>
-    <div class="grid-2">
-      <div class="card">
-        <h3 style="margin-top:0">Weights</h3>
-        <div class="weights" id="weights"></div>
-        <div class="presets" id="presets"></div>
-        <div class="tiles" id="pf-tiles" style="grid-template-columns:repeat(2,1fr)"></div>
-        <p class="small muted">Realised over the test period with daily rebalancing. Sharpe ratio assumes a risk-free rate of 0, which is a simplification.</p>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0">Daily return correlation</h3>
-        <div class="controls"><div class="seg" id="corr-seg"><button data-k="corr_train" class="on">Training years</button><button data-k="corr_test">Test years</button></div></div>
-        <div class="heat" id="heat"></div>
-        <p class="small muted">Lower correlation means more diversification: the portfolio's volatility falls below the weighted average of the assets' volatilities.</p>
-      </div>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Forecast vs realised portfolio volatility (next 20 days)</h3>
-      <div class="chart-box"><canvas id="pfChart"></canvas></div>
-      <div class="table-wrap"><table id="pf-err"></table></div>
-    </div>
-  </section>
-
-  <!-- ============ LIMITS ============ -->
-  <section id="limits">
-    <div class="kicker">Results, errors and limitations</div>
-    <h2>Where the model goes wrong</h2>
-    <div class="card">
-      <h3 style="margin-top:0">Largest test-set errors</h3>
-      <div class="table-wrap"><table id="err-table"></table></div>
-    </div>
-    <h3>Limitations</h3>
-    <ul class="tight" id="limits-list">
-      <li><b>Regime dependence.</b> The model learned that volatility tends to fall back to normal. That helped in the calm 2023&ndash;2024 test period but hurt in 2022, when volatility stayed high for months, and EWMA beat it on validation. A single test period of about 22 months cannot show that the advantage lasts.</li>
-      <li><b>One-day shocks.</b> A VIX spike that fades within days (for example 5 August 2024) leads to large over-predictions, because the model reads it like the start of a crisis.</li>
-      <li><b>Overlapping targets.</b> Consecutive days share 19 of their 20 target days, so there are far fewer independent observations than rows. We use a moving-block bootstrap for confidence intervals for this reason, and the intervals are wide.</li>
-      <li><b>Noisy target.</b> Realised volatility from 20 daily returns is itself a noisy estimate of the true volatility, so even a perfect model would show error.</li>
-      <li><b>Small, liquid universe.</b> A few US-listed ETFs only. The results may not carry over to single stocks, other markets or other horizons.</li>
-      <li><b>Selection is close.</b> The best families' CV scores lie within one fold standard deviation of each other, and the 2020 fold dominates the mean. Another reasonable criterion, such as median fold RMSE, could pick a tree ensemble.</li>
-      <li id="limit-data"></li>
-    </ul>
-  </section>
-
-  <!-- ============ REPRODUCE ============ -->
-  <section id="reproduce">
-    <div class="kicker">Reproducibility</div>
-    <h2>Reproduce our results</h2>
-<pre>pip install -r requirements.txt
-python scripts/run_all.py --refresh-data   # download prices, train, select, test, export, figures
-python -m src.inference --weights SPY=0.6,TLT=0.4   # forecast with the selected model</pre>
-    <p class="muted">Data comes from Yahoo Finance's public endpoint through <code>yfinance</code>, with no credentials. Every number on this page is read from <code>docs/data/site_data.js</code>, which <code>scripts/export_web_data.py</code> writes from the pipeline outputs.</p>
-    <div class="table-wrap"><table id="repro-table"></table></div>
-  </section>
-</main>
-<footer>
-  ES 335 &middot; Siddharth Dangi (25110300) &amp; Aryan Vatsa Chauhan (25110059) &middot; <span id="gen-date"></span> &middot; Educational project, not investment advice.
-</footer>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

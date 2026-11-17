@@ -223,7 +223,7 @@
           "log_target": true
         },
         "fits": 20,
-        "seconds": 0.05
+        "seconds": 0.06
       },
       {
         "name": "Decision tree",
@@ -265,7 +265,7 @@
           "log_target": true
         },
         "fits": 10,
-        "seconds": 3.14
+        "seconds": 2.75
       },
       {
         "name": "SVR (RBF)",
@@ -285,7 +285,7 @@
           "log_target": true
         },
         "fits": 10,
-        "seconds": 23.6
+        "seconds": 17.91
       },
       {
         "name": "Gradient boosting",
@@ -307,7 +307,7 @@
           "log_target": true
         },
         "fits": 10,
-        "seconds": 2.75
+        "seconds": 3.48
       },
       {
         "name": "LightGBM",
@@ -329,7 +329,7 @@
           "log_target": true
         },
         "fits": 10,
-        "seconds": 2.13
+        "seconds": 2.67
       }
     ],
     "selected_family": "Ridge"
@@ -337,7 +337,7 @@
   "stage2_tuning": {
     "family": "Ridge",
     "n_configs": 24,
-    "seconds": 0.17,
+    "seconds": 0.18,
     "best_params": {
       "alpha": 30.0,
       "log_target": true
@@ -463,6 +463,200 @@
         "val_rmse": 5.6509,
         "val_mae": 4.293
       }
+    ],
+    "all_trials": [
+      {
+        "params": {
+          "alpha": 30.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4555,
+        "val_mae": 4.156
+      },
+      {
+        "params": {
+          "alpha": 100.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4556,
+        "val_mae": 4.1537
+      },
+      {
+        "params": {
+          "alpha": 10.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4588,
+        "val_mae": 4.1585
+      },
+      {
+        "params": {
+          "alpha": 3.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4609,
+        "val_mae": 4.1599
+      },
+      {
+        "params": {
+          "alpha": 1.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4617,
+        "val_mae": 4.1604
+      },
+      {
+        "params": {
+          "alpha": 0.1,
+          "log_target": true
+        },
+        "val_rmse": 5.462,
+        "val_mae": 4.1606
+      },
+      {
+        "params": {
+          "alpha": 0.01,
+          "log_target": true
+        },
+        "val_rmse": 5.4621,
+        "val_mae": 4.1606
+      },
+      {
+        "params": {
+          "alpha": 0.001,
+          "log_target": true
+        },
+        "val_rmse": 5.4621,
+        "val_mae": 4.1606
+      },
+      {
+        "params": {
+          "alpha": 300.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4675,
+        "val_mae": 4.1545
+      },
+      {
+        "params": {
+          "alpha": 1000.0,
+          "log_target": true
+        },
+        "val_rmse": 5.4966,
+        "val_mae": 4.1668
+      },
+      {
+        "params": {
+          "alpha": 3000.0,
+          "log_target": true
+        },
+        "val_rmse": 5.5813,
+        "val_mae": 4.215
+      },
+      {
+        "params": {
+          "alpha": 1000.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6001,
+        "val_mae": 4.252
+      },
+      {
+        "params": {
+          "alpha": 3000.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6218,
+        "val_mae": 4.2766
+      },
+      {
+        "params": {
+          "alpha": 300.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6255,
+        "val_mae": 4.2709
+      },
+      {
+        "params": {
+          "alpha": 100.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6509,
+        "val_mae": 4.293
+      },
+      {
+        "params": {
+          "alpha": 30.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6726,
+        "val_mae": 4.3105
+      },
+      {
+        "params": {
+          "alpha": 10.0,
+          "log_target": false
+        },
+        "val_rmse": 5.684,
+        "val_mae": 4.3191
+      },
+      {
+        "params": {
+          "alpha": 3.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6893,
+        "val_mae": 4.323
+      },
+      {
+        "params": {
+          "alpha": 1.0,
+          "log_target": false
+        },
+        "val_rmse": 5.6909,
+        "val_mae": 4.3242
+      },
+      {
+        "params": {
+          "alpha": 0.1,
+          "log_target": false
+        },
+        "val_rmse": 5.6917,
+        "val_mae": 4.3247
+      },
+      {
+        "params": {
+          "alpha": 0.01,
+          "log_target": false
+        },
+        "val_rmse": 5.6918,
+        "val_mae": 4.3248
+      },
+      {
+        "params": {
+          "alpha": 0.001,
+          "log_target": false
+        },
+        "val_rmse": 5.6918,
+        "val_mae": 4.3248
+      },
+      {
+        "params": {
+          "alpha": 10000.0,
+          "log_target": false
+        },
+        "val_rmse": 5.8005,
+        "val_mae": 4.3882
+      },
+      {
+        "params": {
+          "alpha": 10000.0,
+          "log_target": true
+        },
+        "val_rmse": 5.8952,
+        "val_mae": 4.3978
+      }
     ]
   },
   "validation_comparison": {
@@ -513,7 +707,7 @@
     "total_model_fits": 96,
     "training_rows_final_fit": 10512,
     "n_features": 22,
-    "final_fit_seconds": 0.0068,
+    "final_fit_seconds": 0.0077,
     "why_fast": "Ridge has a closed-form solution (one linear solve on a ~10k x 22 matrix), so a fit takes milliseconds; the slowest family (SVR) takes seconds. Speed reflects data size and model class, not skipped training.",
     "shuffled_target_test_RMSE": 4.265,
     "real_target_test_RMSE": 3.635,
@@ -1111,6 +1305,6 @@
     "sklearn": "1.9.1",
     "pandas": "3.1.1",
     "numpy": "2.5.5",
-    "runtime_seconds": 32.4
+    "runtime_seconds": 27.6
   }
 }

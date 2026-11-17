@@ -73,7 +73,22 @@ Yes. Every run logs a `[proof]` line and saves a `training_proof` block in `eval
 * **Shuffled-label control:** the same model trained on randomly shuffled targets scores test RMSE 4.27, against 3.64 with the real targets, so the model learns real signal from the features.
 * The old pipeline's real problem was not speed: it fit all five models once with fixed settings, never used the validation set, and averaged all five at inference. Now one model is selected by CV, tuned on validation, tested once, and that same saved model (`artifacts/final_model.joblib`) is the only one used by `src/inference.py`.
 
-## 4. Repository layout
+## 4. Interactive dashboard (GitHub Pages)
+
+https://siddharthdangi1911.github.io/Portfolio_Risk_Analyzer/ is a static dashboard (Chart.js, no backend) built only from `docs/data/site_data.js`. It has 8 tabs:
+
+| Tab | What you can do |
+|---|---|
+| Overview | Headline answer, KPI cards, test RMSE of every forecast, forecast vs actual per asset |
+| Data | Zoomable price and volatility history with train/val/test bands, return distributions (fat tails), correlations, quality checks, searchable feature list |
+| Model selection | CV RMSE of all 6 models + 3 baselines (with fold spread), per-fold chart, Ridge tuning curve, validation comparison |
+| Test results | Switch metric (RMSE/MAE/R²/QLIKE/bias), bootstrap confidence intervals, predicted-vs-actual scatter, error histograms, per-asset results |
+| Forecast explorer | Test or validation period, any asset, any date window (sliders and presets); the error table recalculates for that window |
+| Errors & regimes | Error by VIX regime, error vs VIX, largest misses (click one to open it in the explorer), limitations |
+| Portfolio lab | Weight sliders and presets, growth of 100, live portfolio risk forecast vs realised, risk/return map, correlation heatmap |
+| Method & reproduce | Training proof, permutation importance, Ridge coefficients, preprocessing choices, run details |
+
+## 5. Repository layout
 
 ```
 src/config.py              assets, dates, splits, horizon, seed (single source of truth)
@@ -91,7 +106,7 @@ scripts/generate_real_figures.py  static figures in artifacts/figures and docs/f
 docs/                      website (index.html, app.js, style.css, data/, figures/)
 ```
 
-## 5. Reproduce
+## 6. Reproduce
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate        # Windows  (source .venv/bin/activate on macOS/Linux)
@@ -104,7 +119,7 @@ python -m http.server 8000 -d docs                    # view the site at http://
 
 Data: Yahoo Finance through `yfinance`, public, no credentials or API keys. The fixed seed is 42. The library versions used are recorded in `evaluation_metrics.json → reproducibility`.
 
-## 6. Limitations
+## 7. Limitations
 * The advantage depends on the regime: the model beat the baselines in calm 2023–2024 but lost to EWMA in 2022.
 * One-day VIX spikes that fade quickly, such as 5 August 2024, cause large over-predictions.
 * 20-day realised volatility is a noisy measure of true volatility, and overlapping targets reduce the effective sample size.

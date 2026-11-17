@@ -80,6 +80,27 @@ def export_for_github_pages() -> Path:
         "single_asset_metrics_test": {a: {m: round(x, 3) for m, x in realised_metrics(rets_test, {a: 1.0}).items()} for a in assets},
     }
 
+    # ---- full price history (data explorer) ----
+    history = {"dates": prices.index.strftime("%Y-%m-%d").tolist(),
+               "close": {c: _rl(prices[c], 2) for c in prices.columns}}
+
+    # ---- validation-period forecasts (2021-2022), models fit on train only ----
+    val_timeline = {}
+    vpath = ARTIFACTS_DIR / "val_predictions.csv"
+    if vpath.exists():
+        vp = pd.read_csv(vpath, index_col=0, parse_dates=True)
+        for a in assets:
+            d = vp[vp["asset"] == a].sort_index()
+            val_timeline[a] = {
+                "dates": d.index.strftime("%Y-%m-%d").tolist(),
+                "actual": _rl(d["target_vol_20d"]),
+                "model": _rl(d[f"pred::{fam} (tuned)"]),
+                "recent": _rl(d[f"pred::{PRIMARY_BASELINE}"]),
+                "hist": _rl(d["pred::Historical average"]),
+                "ewma": _rl(d["pred::EWMA vol (RiskMetrics)"]),
+                "vix": _rl(d["vix_level"], 2),
+            }
+
     site = {
         "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "assets": assets,
@@ -88,6 +109,8 @@ def export_for_github_pages() -> Path:
         "primary_baseline": PRIMARY_BASELINE,
         "timeline": timeline,
         "portfolio": portfolio,
+        "history": history,
+        "val_timeline": val_timeline,
     }
     js = "window.SITE_DATA = " + json.dumps(site, separators=(",", ":")) + ";\n"
     out_js = DOCS_DATA_DIR / "site_data.js"
