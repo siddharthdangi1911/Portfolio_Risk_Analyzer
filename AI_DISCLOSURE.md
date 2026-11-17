@@ -19,7 +19,7 @@
 
 | Part of the project | Who did it | What the AI did |
 |---|---|---|
-| Research question, proposal, choice of assets, baseline and metrics | **Team** | _Fill in: state whether any AI tool helped brainstorm or edit the proposal, and which one._ |
+| Research question, proposal, choice of assets, baseline and metrics | **Team** | ChatGPT help us to get more insight into finance terms |
 | Data download and cleaning (`src/data_loader.py`) | team | Yahoo Finance prices for SPY, QQQ, TLT, GLD and VIX |
 | Feature engineering (`src/feature_engineering.py`) | AI-assisted coding, team-reviewed | Implemented the 22 backward-looking features and the 20-day forward volatility target. |
 | Model selection protocol (`src/model_selection.py`, `src/models/ml_models.py`) | AI-assisted coding, team-reviewed | Audited the old pipeline (all five models fit once, validation unused, ensemble at inference). Rebuilt it as: CV screening on train only → tune the winner on validation → single test. Added LightGBM as a sixth candidate at the team's request. |
