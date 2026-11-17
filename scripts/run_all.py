@@ -39,7 +39,7 @@ def main():
     export_for_github_pages()
     logger.info("STEP 3/3  figures")
     generate_all_figures()
-    logger.info(f"Done in {time.time() - t0:.1f}s. Open docs/index.html or serve docs/ with GitHub Pages.")
+    logger.info(f"Done in {time.time() - t0:.1f}s. Next: cd web && npm run export:docs to rebuild the website.")
 
 
 if __name__ == "__main__":

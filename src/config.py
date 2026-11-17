@@ -16,11 +16,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 ARTIFACTS_DIR = BASE_DIR / "artifacts"
 FIGURES_DIR = ARTIFACTS_DIR / "figures"
-DOCS_DIR = BASE_DIR / "docs"
-DOCS_DATA_DIR = DOCS_DIR / "data"
-DOCS_FIG_DIR = DOCS_DIR / "figures"
+DOCS_DIR = BASE_DIR / "docs"            # static build of the website (GitHub Pages serves this folder)
+WEB_DIR = BASE_DIR / "web"               # Next.js + TypeScript source of the website
+DOCS_DATA_DIR = WEB_DIR / "src" / "data"  # site_data.json, imported by the Next.js pages at build time
+DOCS_FIG_DIR = WEB_DIR / "public" / "figures"
 
-for _d in (DATA_DIR, ARTIFACTS_DIR, FIGURES_DIR, DOCS_DIR, DOCS_DATA_DIR, DOCS_FIG_DIR):
+for _d in (DATA_DIR, ARTIFACTS_DIR, FIGURES_DIR, DOCS_DATA_DIR, DOCS_FIG_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 

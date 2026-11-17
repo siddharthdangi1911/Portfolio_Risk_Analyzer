@@ -2,8 +2,7 @@
 scripts/export_web_data.py
 =============================================================================
 Packs the pipeline outputs into one data file for the static website:
-  docs/data/site_data.js     (window.SITE_DATA = {...}; works on file:// too)
-  docs/data/site_data.json   (same content, for anyone who prefers fetch())
+  web/src/data/site_data.json   imported by the Next.js pages at build time
 Everything shown on the site comes from artifacts produced by
 src/train_pipeline.py - nothing is typed in by hand.
 =============================================================================
@@ -112,12 +111,10 @@ def export_for_github_pages() -> Path:
         "history": history,
         "val_timeline": val_timeline,
     }
-    js = "window.SITE_DATA = " + json.dumps(site, separators=(",", ":")) + ";\n"
-    out_js = DOCS_DATA_DIR / "site_data.js"
-    out_js.write_text(js)
-    (DOCS_DATA_DIR / "site_data.json").write_text(json.dumps(site, separators=(",", ":")))
-    logger.info(f"Wrote {out_js} ({out_js.stat().st_size / 1024:.0f} KB)")
-    return out_js
+    out = DOCS_DATA_DIR / "site_data.json"
+    out.write_text(json.dumps(site, separators=(",", ":")))
+    logger.info(f"Wrote {out} ({out.stat().st_size / 1024:.0f} KB)")
+    return out
 
 
 if __name__ == "__main__":

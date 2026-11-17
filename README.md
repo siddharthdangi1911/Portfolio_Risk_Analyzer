@@ -73,20 +73,20 @@ Yes. Every run logs a `[proof]` line and saves a `training_proof` block in `eval
 * **Shuffled-label control:** the same model trained on randomly shuffled targets scores test RMSE 4.27, against 3.64 with the real targets, so the model learns real signal from the features.
 * The old pipeline's real problem was not speed: it fit all five models once with fixed settings, never used the validation set, and averaged all five at inference. Now one model is selected by CV, tuned on validation, tested once, and that same saved model (`artifacts/final_model.joblib`) is the only one used by `src/inference.py`.
 
-## 4. Interactive dashboard (GitHub Pages)
+## 4. Interactive website (Next.js, static export)
 
-https://siddharthdangi1911.github.io/Portfolio_Risk_Analyzer/ is a static dashboard (Chart.js, no backend) built only from `docs/data/site_data.js`. It has 8 tabs:
+https://siddharthdangi1911.github.io/Portfolio_Risk_Analyzer/ is built with **Next.js 16 + TypeScript + Recharts** in `web/` and exported as static pages to `docs/` (GitHub Pages, no backend). Every number is read at build time from `web/src/data/site_data.json`, which `scripts/export_web_data.py` writes from the pipeline outputs.
 
-| Tab | What you can do |
+| Page | What you can do |
 |---|---|
-| Overview | Headline answer, KPI cards, test RMSE of every forecast, forecast vs actual per asset |
-| Data | Zoomable price and volatility history with train/val/test bands, return distributions (fat tails), correlations, quality checks, searchable feature list |
-| Model selection | CV RMSE of all 6 models + 3 baselines (with fold spread), per-fold chart, Ridge tuning curve, validation comparison |
-| Test results | Switch metric (RMSE/MAE/R²/QLIKE/bias), bootstrap confidence intervals, predicted-vs-actual scatter, error histograms, per-asset results |
-| Forecast explorer | Test or validation period, any asset, any date window (sliders and presets); the error table recalculates for that window |
-| Errors & regimes | Error by VIX regime, error vs VIX, largest misses (click one to open it in the explorer), limitations |
-| Portfolio lab | Weight sliders and presets, growth of 100, live portfolio risk forecast vs realised, risk/return map, correlation heatmap |
-| Method & reproduce | Training proof, permutation importance, Ridge coefficients, preprocessing choices, run details |
+| Overview | Headline answer, key numbers, forecast vs reality per ETF, how the model was chosen |
+| Data | Zoomable volatility and price history with train/validation/test bands, fat-tailed returns, correlations, quality checks, searchable features |
+| Model selection | CV error of all 6 models + 3 baselines, error per fold, Ridge tuning curve, validation comparison |
+| Test results | Switch metric (RMSE/MAE/R²/QLIKE/bias), bootstrap confidence intervals, predicted vs realised, error distribution |
+| Forecast explorer | Test or validation period, any ETF, any date window; the accuracy table recalculates for that window |
+| Errors & limits | Error by VIX regime, error vs VIX, largest misses (open any in the explorer), limitations |
+| Portfolio lab | Weight sliders and presets, growth of 100, live portfolio risk forecast vs realised, risk/return map |
+| Method | Training proof, feature importance, Ridge coefficients, preprocessing, why ROC AUC does not apply |
 
 ## 5. Repository layout
 
@@ -101,9 +101,9 @@ src/portfolio.py           portfolio metrics, trailing correlations, presets
 src/train_pipeline.py      end-to-end run, saves artifacts/
 src/inference.py           forecasts with the selected model (CLI)
 scripts/run_all.py         train → export website data → figures
-scripts/export_web_data.py writes docs/data/site_data.js
-scripts/generate_real_figures.py  static figures in artifacts/figures and docs/figures
-docs/                      website (index.html, app.js, style.css, data/, figures/)
+scripts/export_web_data.py writes web/src/data/site_data.json
+web/                       Next.js + TypeScript website source (app/ pages, components/ charts)
+docs/                      static export of web/ served by GitHub Pages (generated, do not edit)
 ```
 
 ## 6. Reproduce
@@ -111,13 +111,17 @@ docs/                      website (index.html, app.js, style.css, data/, figure
 ```bash
 python -m venv .venv && .venv\Scripts\activate        # Windows  (source .venv/bin/activate on macOS/Linux)
 pip install -r requirements.txt
-python scripts/run_all.py --refresh-data              # about 30 s
+python scripts/run_all.py --refresh-data              # about 30 s: download, select, tune, test, export data
 python -m src.inference --weights SPY=0.4,TLT=0.4,GLD=0.2
 python -m src.inference --date 2024-08-05             # forecast as of a past date, with the realised value
-python -m http.server 8000 -d docs                    # view the site at http://localhost:8000
+cd web && npm install && npm run export:docs          # build the static website into docs/
+npm run dev                                           # or preview it live at http://localhost:3000/Portfolio_Risk_Analyzer
 ```
 
 Data: Yahoo Finance through `yfinance`, public, no credentials or API keys. The fixed seed is 42. The library versions used are recorded in `evaluation_metrics.json → reproducibility`.
+
+### Why not ROC AUC?
+ROC AUC measures how well a classifier ranks yes/no outcomes. Our target is a continuous number (volatility in %), so there is no ROC curve. Models are compared with regression metrics: RMSE for every selection decision, plus MAE, R², bias and QLIKE (the standard volatility loss).
 
 ## 7. Limitations
 * The advantage depends on the regime: the model beat the baselines in calm 2023–2024 but lost to EWMA in 2022.
