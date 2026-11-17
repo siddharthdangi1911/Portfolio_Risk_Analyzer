@@ -3,6 +3,7 @@
 **Course:** ES 335 Machine Learning (Undergraduate track), IIT Gandhinagar
 **Team:** Siddharth Dangi (25110300) & Aryan Vatsa Chauhan (25110059)
 **Website:** [`docs/`](docs/), published with GitHub Pages at https://siddharthdangi1911.github.io/Portfolio_Risk_Analyzer/
+**AI use:** see [AI_DISCLOSURE.md](AI_DISCLOSURE.md) for the tools used, the kinds of assistance, independent checks and citations.
 
 ---
 
