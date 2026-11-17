@@ -68,16 +68,7 @@ export default function DataPage() {
         </Card>
       </div>
 
-      <div className="grid g-12">
-        <Card title="Quality checks">
-          <dl className="facts">
-            <dt>Duplicate dates</dt><dd>{q.duplicate_dates_removed}</dd>
-            <dt>Missing / non-positive</dt><dd>{missing}</dd>
-            <dt>Gaps over 4 days</dt><dd>{q.calendar_gaps_over_4_days} (market closure)</dd>
-            <dt>Moves over 10%</dt><dd>{moves.length ? moves.join(", ") : "none"} — real March 2020 crash days, kept</dd>
-            <dt>Adjustment</dt><dd>Dividend and split adjusted</dd>
-          </dl>
-        </Card>
+      <div className="flex w-full">
         <Card title="Features" sub="Returns, volatility windows, VIX and asset identity">
           <FeatureTable rows={features} />
         </Card>

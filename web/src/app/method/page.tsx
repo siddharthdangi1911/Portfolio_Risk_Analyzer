@@ -29,7 +29,7 @@ export default function MethodPage() {
       {tp && (
         <div className="kpis">
           <Kpi label="Model fits run" value={tp.total_model_fits} sub="CV + tuning + final + control" />
-          <Kpi label="Final fit time" value={`${(tp.final_fit_seconds * 1000).toFixed(1)} ms`} sub={`${fmtInt(tp.training_rows_final_fit)} rows × ${tp.n_features} features`} />
+          <Kpi label="Final fit time" value={`${(tp.final_fit_seconds * 1000).toFixed(1)} s`} sub={`${fmtInt(tp.training_rows_final_fit)} rows × ${tp.n_features} features`} />
           <Kpi label="Test RMSE, real labels" value={f2(tp.real_target_test_RMSE)} />
           <Kpi label="Test RMSE, shuffled labels" value={f2(tp.shuffled_target_test_RMSE)} badge="real labels clearly better" tone="good" />
         </div>
@@ -44,36 +44,9 @@ export default function MethodPage() {
         </Card>
       </div>
 
-      <div className="grid g2">
+      <div className="flex w-full">
         <Card title="Preprocessing choices">
           <ul className="clean">{PREP.map(([t, d]) => <li key={t}><span><b>{t}.</b> {d}</span></li>)}</ul>
-        </Card>
-        <Card title="Why not ROC AUC?">
-          <ul className="clean">
-            <li><span><b>ROC AUC is for classification</b> (yes/no outcomes ranked by a probability). Our target is a continuous number, so there is no ROC curve to draw.</span></li>
-            <li><span><b>We use regression metrics:</b> RMSE to select models, plus MAE, R², bias and QLIKE, the standard volatility loss.</span></li>
-            <li><span>AUC would only fit a reframed task, e.g. “will volatility exceed 25%?”, which throws away information and is not our question.</span></li>
-          </ul>
-        </Card>
-      </div>
-
-      <div className="grid g2">
-        <Card title="Reproduce">
-          <pre>{`pip install -r requirements.txt
-python scripts/run_all.py --refresh-data
-python -m src.inference --weights SPY=0.6,TLT=0.4
-cd web && npm install && npm run export:docs`}</pre>
-          <p className="hint">Public Yahoo Finance data, no API keys. Every number on this site is read from the pipeline output at build time.</p>
-        </Card>
-        <Card title="Run details">
-          <dl className="facts">
-            <dt>Final model</dt><dd>{FAM} · α = {String(R.final_model.params.alpha ?? "–")} · trained through {R.final_model.trained_through}</dd>
-            <dt>Seed</dt><dd>{rp.seed}</dd>
-            <dt>Versions</dt><dd>Python {rp.python} · scikit-learn {rp.sklearn} · pandas {rp.pandas}</dd>
-            <dt>Runtime</dt><dd>{rp.runtime_seconds} s for the full pipeline</dd>
-            {tp && <><dt>Smearing factor</dt><dd>{f3(tp.smearing_factor)}</dd></>}
-            <dt>Saved model</dt><dd><code>artifacts/final_model.joblib</code>, the only model used for inference</dd>
-          </dl>
         </Card>
       </div>
     </>

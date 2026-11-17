@@ -12,15 +12,6 @@ export default function Overview() {
   const lgb = R.stage1_screening.results.find((r) => r.name === "LightGBM");
   return (
     <>
-      <PageHead eyebrow="ES 335 · Machine Learning" title="Can ML forecast next-month volatility better than history?">
-        At each day’s close we forecast how much an ETF will move over the next 20 trading days, then check the forecast on years the model never saw.
-      </PageHead>
-
-      <Callout>
-        <strong>Yes on the test years, by {pct0(improvement(EWMA))}–{pct0(improvement(BASE))}, but it depends on the regime.</strong>{" "}
-        {FAM} beat all three baselines on 2023–24 (RMSE {f2(m.RMSE)} vs {f2(tm[EWMA].RMSE)} for EWMA), yet EWMA was better in the 2022 bear market.
-      </Callout>
-
       <div className="kpis">
         <Kpi label="Selected model" value={FAM} sub={`best of ${FAMILIES.length} by cross-validation`} />
         <Kpi label="Test RMSE" value={f2(m.RMSE)} sub="volatility points" badge={`${pct0(improvement(BASE))} below recent vol`} tone="good" />
@@ -50,15 +41,6 @@ export default function Overview() {
           <Link href="/models/" className="step"><span className="step-n">STAGE 2</span><b>Tune on validation</b><span>{R.stage2_tuning.n_configs} settings scored on 2021–22</span></Link>
           <Link href="/results/" className="step"><span className="step-n">STAGE 3</span><b>Test once</b><span>Refit, then score 2023–24 a single time</span></Link>
         </div>
-      </Card>
-
-      <Card title="Scope">
-        <dl className="facts">
-          <dt>Target</dt><dd>Annualised realised volatility (%) over the next 20 trading days</dd>
-          <dt>One row</dt><dd>One ETF on one trading day</dd>
-          <dt>Prediction time</dt><dd>After the close of day t, using only data up to t</dd>
-          <dt>Not claimed</dt><dd>Return or direction prediction, trading profits, investment advice</dd>
-        </dl>
       </Card>
     </>
   );

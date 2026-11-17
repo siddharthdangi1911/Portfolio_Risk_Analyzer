@@ -71,7 +71,6 @@ export function Sidebar() {
         <NavLinks />
       </nav>
       <div className="sidebar-foot">
-        <ThemeToggle />
         <a className="foot-link" href="https://github.com/siddharthdangi1911/Portfolio_Risk_Analyzer">
           {Icon.github} Source on GitHub
         </a>
