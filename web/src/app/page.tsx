@@ -12,6 +12,10 @@ export default function Overview() {
   const lgb = R.stage1_screening.results.find((r) => r.name === "LightGBM");
   return (
     <>
+      <PageHead eyebrow="" title="Can ML forecast next-month volatility better than history?">
+        At each day’s close we forecast how much an ETF will move over the next 20 trading days, then check the forecast on years the model never saw.
+      </PageHead>
+
       <div className="kpis">
         <Kpi label="Selected model" value={FAM} sub={`best of ${FAMILIES.length} by cross-validation`} />
         <Kpi label="Test RMSE" value={f2(m.RMSE)} sub="volatility points" badge={`${pct0(improvement(BASE))} below recent vol`} tone="good" />
